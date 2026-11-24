@@ -1,0 +1,148 @@
+# HabitLoop — full local stack (see docs/02 §8).
+# Run: docker compose up --build
+#
+# Analytics uses the in-memory store here for a frictionless local run; DynamoDB is used in AWS
+# (set ANALYTICS_STORE=dynamodb + a DynamoDB Local service to exercise it locally).
+
+name: habitloop
+
+x-jwt: &jwt
+  JWT_SECRET: ${JWT_SECRET:-local-dev-habitloop-jwt-secret-change-me-32bytes-min}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: habitloop
+      POSTGRES_PASSWORD: habitloop
+      POSTGRES_DB: habitloop_user
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U habitloop"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.8.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  user-service:
+    build:
+      context: ./backend
+      dockerfile: user-service/Dockerfile
+    ports: ["8081:8081"]
+    environment:
+      <<: *jwt
+      USER_DB_URL: jdbc:postgresql://postgres:5432/habitloop_user
+      USER_DB_USER: habitloop
+      USER_DB_PASSWORD: habitloop
+      SEED_DEMO: "true"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  activity-service:
+    build:
+      context: ./backend
+      dockerfile: activity-service/Dockerfile
+    ports: ["8082:8082"]
+    environment:
+      <<: *jwt
+      ACTIVITY_DB_URL: jdbc:postgresql://postgres:5432/habitloop_activity
+      ACTIVITY_DB_USER: habitloop
+      ACTIVITY_DB_PASSWORD: habitloop
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_ENABLED: "true"
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  challenge-service:
+    build:
+      context: ./backend
+      dockerfile: challenge-service/Dockerfile
+    ports: ["8083:8083"]
+    environment:
+      <<: *jwt
+      CHALLENGE_DB_URL: jdbc:postgresql://postgres:5432/habitloop_challenge
+      CHALLENGE_DB_USER: habitloop
+      CHALLENGE_DB_PASSWORD: habitloop
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_ENABLED: "true"
+      USER_SERVICE_URL: http://user-service:8081
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  integration-service:
+    build:
+      context: ./backend
+      dockerfile: integration-service/Dockerfile
+    ports: ["8084:8084"]
+    environment:
+      <<: *jwt
+      INTEGRATION_DB_URL: jdbc:postgresql://postgres:5432/habitloop_integration
+      INTEGRATION_DB_USER: habitloop
+      INTEGRATION_DB_PASSWORD: habitloop
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_ENABLED: "true"
+      WEBHOOK_BASE_URL: http://localhost:8084
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  analytics-service:
+    build:
+      context: ./backend
+      dockerfile: analytics-service/Dockerfile
+    ports: ["8085:8085"]
+    environment:
+      <<: *jwt
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_ENABLED: "true"
+      ANALYTICS_STORE: memory
+    depends_on:
+      kafka: { condition: service_healthy }
+
+  recommendation-service:
+    build:
+      context: ./backend
+      dockerfile: recommendation-service/Dockerfile
+    ports: ["8086:8086"]
+    environment:
+      <<: *jwt
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_ENABLED: "true"
+      ANALYTICS_SERVICE_URL: http://analytics-service:8085
+    depends_on:
+      kafka: { condition: service_healthy }
+
+  lambda-normalizer:
+    build:
+      context: ./backend
+      dockerfile: lambda-normalizer/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+    depends_on:
+      kafka: { condition: service_healthy }
+
+volumes:
+  pgdata:
