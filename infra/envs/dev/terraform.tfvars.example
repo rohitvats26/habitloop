@@ -6,3 +6,7 @@ alarm_email = "ops@example.com"
 
 # Supply via a secret mechanism / CI, not committed:
 # jwt_secret = "a-strong-32+-byte-secret"
+
+# Optional: ACM certificate ARN to enable the ALB HTTPS:443 listener (needs a domain).
+# Leave empty for HTTP-only (free-tier demo).
+# certificate_arn = "arn:aws:acm:ap-south-1:123456789012:certificate/xxxx"

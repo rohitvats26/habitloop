@@ -12,7 +12,7 @@ variable "allocated_storage" {
 }
 variable "multi_az" {
   type    = bool
-  default = true
+  default = false # free-tier: single-AZ db.t3.micro. Set true for production HA.
 }
 variable "tags" {
   type    = map(string)

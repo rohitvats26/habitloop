@@ -13,23 +13,19 @@ variable "tags" {
   default = {}
 }
 
-# Custom event bus for partner integration events (docs/06 §6).
+# Custom event bus for partner integration events (PDF: "EventBridge and Lambda for event-driven
+# automation such as integration event processing"). docs/06 §6.
 resource "aws_cloudwatch_event_bus" "this" {
   name = "${var.name}-bus"
   tags = var.tags
 }
 
-# Dead-letter queue for events the Lambda could not process.
+# Dead-letter queue for events the Lambda could not process (PDF CloudWatch alert: "queue depth";
+# trade-offs: "requires idempotency and retry handling").
 resource "aws_sqs_queue" "dlq" {
   name                      = "${var.name}-partner-events-dlq"
   message_retention_seconds = 1209600
   tags                      = var.tags
-}
-
-# Normalized output topic (activity-service / MSK consumes this in a fuller build).
-resource "aws_sns_topic" "normalized" {
-  name = "${var.name}-partner-activity-normalized"
-  tags = var.tags
 }
 
 data "aws_iam_policy_document" "lambda_assume" {
@@ -48,6 +44,8 @@ resource "aws_iam_role" "lambda" {
   tags               = var.tags
 }
 
+# Least-privilege: logs + publish the normalized event back onto the same EventBridge bus
+# (PDF step 5: "valid events are stored as activity logs" — consumed by activity-service). No SNS.
 resource "aws_iam_role_policy" "lambda" {
   name = "normalizer-permissions"
   role = aws_iam_role.lambda.id
@@ -61,8 +59,8 @@ resource "aws_iam_role_policy" "lambda" {
       },
       {
         Effect   = "Allow"
-        Action   = ["sns:Publish"]
-        Resource = [aws_sns_topic.normalized.arn]
+        Action   = ["events:PutEvents"]
+        Resource = [aws_cloudwatch_event_bus.this.arn]
       },
       {
         Effect   = "Allow"
@@ -84,7 +82,7 @@ resource "aws_lambda_function" "normalizer" {
 
   environment {
     variables = {
-      NORMALIZED_TOPIC_ARN = aws_sns_topic.normalized.arn
+      EVENT_BUS_NAME = aws_cloudwatch_event_bus.this.name
     }
   }
 
@@ -124,6 +122,6 @@ resource "aws_lambda_permission" "events" {
 }
 
 output "bus_name" { value = aws_cloudwatch_event_bus.this.name }
+output "bus_arn" { value = aws_cloudwatch_event_bus.this.arn }
 output "lambda_name" { value = aws_lambda_function.normalizer.function_name }
 output "dlq_name" { value = aws_sqs_queue.dlq.name }
-output "normalized_topic_arn" { value = aws_sns_topic.normalized.arn }

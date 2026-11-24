@@ -1,6 +1,16 @@
 output "alb_dns_name" {
-  description = "Public entry point (API + frontend)"
+  description = "Public entry point for the backend API (path-routed to services)"
   value       = module.alb.alb_dns_name
+}
+
+output "frontend_bucket" {
+  description = "S3 bucket holding the static frontend build"
+  value       = module.s3_frontend.bucket_name
+}
+
+output "frontend_url" {
+  description = "S3 website URL for the frontend (HTTP)"
+  value       = "http://${module.s3_frontend.website_endpoint}"
 }
 
 output "ecr_repository_urls" {

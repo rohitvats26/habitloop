@@ -1,9 +1,10 @@
 data "aws_caller_identity" "current" {}
 
 locals {
+  # Backend microservices only. The frontend is hosted on S3 (static), not ECS (PDF Session 3).
   svc_names = [
     "user-service", "activity-service", "challenge-service",
-    "integration-service", "analytics-service", "recommendation-service", "frontend"
+    "integration-service", "analytics-service", "recommendation-service"
   ]
   images         = { for s in local.svc_names : s => "${module.ecr.repository_urls[s]}:${var.image_tag}" }
   rds_host       = module.rds.endpoint
@@ -19,7 +20,6 @@ locals {
     "integration-service"    = { port = 8084, priority = 40, health_check_path = "/actuator/health", path_patterns = ["/api/integrations/*", "/api/webhooks/*"] }
     "analytics-service"      = { port = 8085, priority = 50, health_check_path = "/actuator/health", path_patterns = ["/api/analytics/*"] }
     "recommendation-service" = { port = 8086, priority = 60, health_check_path = "/actuator/health", path_patterns = ["/api/recommendations/*"] }
-    "frontend"               = { port = 3000, priority = 100, health_check_path = "/", path_patterns = ["/*"] }
   }
 
   common_backend_env = {
@@ -28,49 +28,40 @@ locals {
 
   ecs_services = {
     "user-service" = {
-      image            = local.images["user-service"], port = 8081, cpu = 512, memory = 1024, desired_count = 2
+      image            = local.images["user-service"], port = 8081, cpu = 256, memory = 512, desired_count = 1
       environment      = merge(local.common_backend_env, { USER_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_user", USER_DB_USER = "habitloop", SEED_DEMO = "false" })
       secrets          = { USER_DB_PASSWORD = local.db_pwd_ref }
       target_group_arn = module.alb.target_group_arns["user-service"]
     }
     "activity-service" = {
-      image            = local.images["activity-service"], port = 8082, cpu = 512, memory = 1024, desired_count = 2
+      image            = local.images["activity-service"], port = 8082, cpu = 256, memory = 512, desired_count = 1
       environment      = merge(local.common_backend_env, { ACTIVITY_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_activity", ACTIVITY_DB_USER = "habitloop" })
       secrets          = { ACTIVITY_DB_PASSWORD = local.db_pwd_ref }
       target_group_arn = module.alb.target_group_arns["activity-service"]
     }
     "challenge-service" = {
-      image            = local.images["challenge-service"], port = 8083, cpu = 512, memory = 1024, desired_count = 2
+      image            = local.images["challenge-service"], port = 8083, cpu = 256, memory = 512, desired_count = 1
       environment      = merge(local.common_backend_env, { CHALLENGE_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_challenge", CHALLENGE_DB_USER = "habitloop", USER_SERVICE_URL = local.alb_dns })
       secrets          = { CHALLENGE_DB_PASSWORD = local.db_pwd_ref }
       target_group_arn = module.alb.target_group_arns["challenge-service"]
     }
     "integration-service" = {
-      image            = local.images["integration-service"], port = 8084, cpu = 512, memory = 1024, desired_count = 2
+      image            = local.images["integration-service"], port = 8084, cpu = 256, memory = 512, desired_count = 1
       environment      = merge(local.common_backend_env, { INTEGRATION_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_integration", INTEGRATION_DB_USER = "habitloop", WEBHOOK_BASE_URL = local.alb_dns })
       secrets          = { INTEGRATION_DB_PASSWORD = local.db_pwd_ref }
       target_group_arn = module.alb.target_group_arns["integration-service"]
     }
     "analytics-service" = {
-      image            = local.images["analytics-service"], port = 8085, cpu = 512, memory = 1024, desired_count = 2
+      image            = local.images["analytics-service"], port = 8085, cpu = 256, memory = 512, desired_count = 1
       environment      = merge(local.common_backend_env, { ANALYTICS_STORE = "dynamodb", ANALYTICS_TABLE = module.dynamodb.table_name, AWS_REGION = var.region })
       secrets          = {}
       target_group_arn = module.alb.target_group_arns["analytics-service"]
     }
     "recommendation-service" = {
-      image            = local.images["recommendation-service"], port = 8086, cpu = 512, memory = 1024, desired_count = 2
+      image            = local.images["recommendation-service"], port = 8086, cpu = 256, memory = 512, desired_count = 1
       environment      = merge(local.common_backend_env, { ANALYTICS_SERVICE_URL = local.alb_dns })
       secrets          = {}
       target_group_arn = module.alb.target_group_arns["recommendation-service"]
-    }
-    "frontend" = {
-      image = local.images["frontend"], port = 3000, cpu = 256, memory = 512, desired_count = 2
-      environment = {
-        USER_SERVICE_URL        = local.alb_dns, ACTIVITY_SERVICE_URL = local.alb_dns, CHALLENGE_SERVICE_URL = local.alb_dns,
-        INTEGRATION_SERVICE_URL = local.alb_dns, ANALYTICS_SERVICE_URL = local.alb_dns, RECOMMENDATION_SERVICE_URL = local.alb_dns
-      }
-      secrets          = {}
-      target_group_arn = module.alb.target_group_arns["frontend"]
     }
   }
 }
@@ -104,6 +95,13 @@ module "alb" {
   vpc_id            = module.network.vpc_id
   public_subnet_ids = module.network.public_subnet_ids
   services          = local.alb_services
+  certificate_arn   = var.certificate_arn
+}
+
+# Frontend: static SvelteKit build hosted on S3 (PDF Session 3).
+module "s3_frontend" {
+  source = "../../modules/s3"
+  name   = var.name
 }
 
 # ECS tasks security group — created here (not in the ecs module) so RDS can reference it without a cycle.

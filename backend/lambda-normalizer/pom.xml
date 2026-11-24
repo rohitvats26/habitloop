@@ -38,7 +38,7 @@
         </dependency>
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
-            <artifactId>sns</artifactId>
+            <artifactId>eventbridge</artifactId>
         </dependency>
 
         <dependency>

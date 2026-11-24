@@ -29,6 +29,12 @@ variable "alarm_email" {
   default = ""
 }
 
+variable "certificate_arn" {
+  type        = string
+  default     = ""
+  description = "ACM cert ARN for the ALB HTTPS:443 listener (needs a domain). Empty = HTTP only."
+}
+
 variable "lambda_jar_path" {
   type    = string
   default = "../../../backend/lambda-normalizer/target/lambda-normalizer-0.0.1-SNAPSHOT.jar"

@@ -10,9 +10,18 @@ variable "services" {
     health_check_path = string
   }))
 }
+variable "certificate_arn" {
+  type        = string
+  default     = ""
+  description = "ACM certificate ARN. When set, an HTTPS:443 listener is created and HTTP:80 redirects to it (PDF: HTTPS/TLS). Requires a domain + ACM cert."
+}
 variable "tags" {
   type    = map(string)
   default = {}
+}
+
+locals {
+  https_enabled = var.certificate_arn != ""
 }
 
 resource "aws_security_group" "alb" {
@@ -73,11 +82,44 @@ resource "aws_lb_target_group" "svc" {
   tags = merge(var.tags, { Name = "${var.name}-${each.key}-tg" })
 }
 
-# HTTP listener. In production add an HTTPS (443) listener with an ACM cert and redirect 80 -> 443.
+# HTTP listener. When a certificate is provided it redirects to HTTPS; otherwise it serves the rules.
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.this.arn
   port              = 80
   protocol          = "HTTP"
+
+  dynamic "default_action" {
+    for_each = local.https_enabled ? [1] : []
+    content {
+      type = "redirect"
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+  }
+  dynamic "default_action" {
+    for_each = local.https_enabled ? [] : [1]
+    content {
+      type = "fixed-response"
+      fixed_response {
+        content_type = "text/plain"
+        message_body = "Not Found"
+        status_code  = "404"
+      }
+    }
+  }
+}
+
+# HTTPS listener (only when an ACM cert is supplied). PDF: "HTTPS/TLS encryption".
+resource "aws_lb_listener" "https" {
+  count             = local.https_enabled ? 1 : 0
+  load_balancer_arn = aws_lb.this.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = var.certificate_arn
 
   default_action {
     type = "fixed-response"
@@ -89,9 +131,13 @@ resource "aws_lb_listener" "http" {
   }
 }
 
+locals {
+  svc_listener_arn = local.https_enabled ? aws_lb_listener.https[0].arn : aws_lb_listener.http.arn
+}
+
 resource "aws_lb_listener_rule" "svc" {
   for_each     = var.services
-  listener_arn = aws_lb_listener.http.arn
+  listener_arn = local.svc_listener_arn
   priority     = each.value.priority
 
   action {
