@@ -1,26 +1,48 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  let { form } = $props();
+  import { goto } from '$app/navigation';
+  import { api, ApiError } from '$lib/api';
+  import { setToken } from '$lib/auth.svelte';
+
+  let email = $state('');
+  let password = $state('');
+  let tenantCode = $state('');
+  let error = $state('');
+  let loading = $state(false);
+
+  async function submit(e: SubmitEvent) {
+    e.preventDefault();
+    error = '';
+    loading = true;
+    try {
+      const res = await api.auth.login({ email, password, tenantCode: tenantCode || undefined });
+      setToken(res.accessToken);
+      await goto('/dashboard');
+    } catch (err) {
+      error = err instanceof ApiError ? err.message : 'Unexpected error';
+    } finally {
+      loading = false;
+    }
+  }
 </script>
 
 <div class="auth">
-  <form method="POST" use:enhance class="card">
+  <form onsubmit={submit} class="card">
     <h1>Welcome back</h1>
     <p class="muted">Log in to your HabitLoop account.</p>
-    {#if form?.error}<div class="error-banner">{form.error}</div>{/if}
+    {#if error}<div class="error-banner">{error}</div>{/if}
     <div class="field">
       <label class="label" for="email">Email</label>
-      <input class="input" id="email" name="email" type="email" value={form?.email ?? ''} required />
+      <input class="input" id="email" type="email" bind:value={email} required />
     </div>
     <div class="field">
       <label class="label" for="password">Password</label>
-      <input class="input" id="password" name="password" type="password" required />
+      <input class="input" id="password" type="password" bind:value={password} required />
     </div>
     <div class="field">
       <label class="label" for="tenantCode">Tenant code (optional)</label>
-      <input class="input" id="tenantCode" name="tenantCode" placeholder="Only if your email is in multiple tenants" />
+      <input class="input" id="tenantCode" bind:value={tenantCode} placeholder="Only if your email is in multiple tenants" />
     </div>
-    <button class="btn btn-primary" type="submit">Log in</button>
+    <button class="btn btn-primary" type="submit" disabled={loading}>{loading ? 'Logging in…' : 'Log in'}</button>
     <p class="muted" style="margin-top:0.9rem">No account? <a href="/register">Create one</a></p>
   </form>
 </div>

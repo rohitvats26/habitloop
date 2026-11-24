@@ -16,8 +16,9 @@ For each step: what Ria does in the UI, the API call behind it, and what happens
 - **Tenant:** Acme Wellness (multi-tenant — every row Ria touches is scoped to her `tenantId`, taken from
   her JWT, never from the request body).
 - **User:** Ria (TENANT_ADMIN of the tenant she creates).
-- Base: local Docker Compose; each service on its own port (no gateway). The SvelteKit app at
-  `http://localhost:3000` is what Ria actually sees; it calls the services server-side.
+- Base: local Docker Compose; each service on its own port (no gateway). The SvelteKit **static SPA** is
+  what Ria actually sees (dev: `http://localhost:5173`; AWS: the S3 website URL); it calls the services from
+  the browser with a Bearer token.
 
 ---
 
@@ -29,13 +30,13 @@ For each step: what Ria does in the UI, the API call behind it, and what happens
   "timezone": "Asia/Kolkata", "tenantName": "Acme Wellness" }
 ```
 **Behind the scenes (user-service):** creates the `Tenant`, the `User` (BCrypt-hashed password), a
-`UserProfile`, and assigns the `TENANT_ADMIN` role. The SvelteKit register action then auto-logs-in and
-stores the JWT in an **httpOnly cookie** (never exposed to browser JS).
+`UserProfile`, and assigns the `TENANT_ADMIN` role. The SPA then auto-logs-in and stores the JWT client-side
+(`localStorage`), sending it as a `Authorization: Bearer` header on subsequent calls.
 
 ## Step 2 — Log in (if returning)
 **UI:** `/login`. **API:** `POST {userBase}/api/auth/login` → `{ accessToken, refreshToken, expiresIn }`.
-The JWT carries `tenantId`, `userId`, `roles`. `hooks.server.ts` reads the cookie on every request and
-guards protected routes.
+The JWT carries `tenantId`, `userId`, `roles`. The client stores it (`auth.svelte.ts`) and the `(app)` route
+guard (`(app)/+layout.ts`) redirects to `/login` when there is no token.
 
 ## Step 3 — Create an activity (habit)
 **UI:** `/habits` → "New habit" → name *Morning run*, schedule Mon/Wed/Fri at 07:00.

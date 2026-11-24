@@ -1,28 +1,58 @@
 <script lang="ts">
   import Topbar from '$lib/components/Topbar.svelte';
-  import { enhance } from '$app/forms';
-  let { data, form } = $props();
+  import { onMount } from 'svelte';
+  import { api, ApiError } from '$lib/api';
+  import { pushToast } from '$lib/stores/toast.svelte';
+  import type { Invitation, Page } from '$lib/types';
+
+  let invitations = $state<Invitation[]>([]);
+  let error = $state('');
+
+  async function load() {
+    try {
+      const inv = (await api.invitations.pending()) as Page<Invitation>;
+      invitations = inv.content ?? [];
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : 'Failed to load invitations';
+    }
+  }
+
+  onMount(load);
+
+  async function accept(id: string) {
+    try {
+      await api.invitations.accept(id);
+      pushToast('Invitation accepted', 'success');
+      await load();
+    } catch (e) {
+      pushToast(e instanceof ApiError ? e.message : 'Failed', 'error');
+    }
+  }
+
+  async function reject(id: string) {
+    try {
+      await api.invitations.reject(id);
+      pushToast('Invitation rejected', 'info');
+      await load();
+    } catch (e) {
+      pushToast(e instanceof ApiError ? e.message : 'Failed', 'error');
+    }
+  }
 </script>
 
 <Topbar title="Invitations" />
-{#if form?.error}<div class="error-banner">{form.error}</div>{/if}
+{#if error}<div class="error-banner">{error}</div>{/if}
 
 <div class="grid list">
-  {#each data.invitations.content as inv (inv.id)}
+  {#each invitations as inv (inv.id)}
     <div class="card inv">
       <div>
         <strong>Challenge invite</strong>
         <div class="muted">Challenge {inv.challengeId.slice(0, 8)}… · from {inv.inviterId.slice(0, 8)}…</div>
       </div>
       <div class="ops">
-        <form method="POST" action="?/accept" use:enhance>
-          <input type="hidden" name="id" value={inv.id} />
-          <button class="btn btn-primary" type="submit">Accept</button>
-        </form>
-        <form method="POST" action="?/reject" use:enhance>
-          <input type="hidden" name="id" value={inv.id} />
-          <button class="btn" type="submit">Reject</button>
-        </form>
+        <button class="btn btn-primary" onclick={() => accept(inv.id)}>Accept</button>
+        <button class="btn" onclick={() => reject(inv.id)}>Reject</button>
       </div>
     </div>
   {:else}

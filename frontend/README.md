@@ -7,22 +7,24 @@ Production-shaped SaaS UI for HabitLoop. Session 2 of the assignment.
 
 ## Architecture decisions
 - **SvelteKit 2 + Svelte 5 Runes** (`$state`, `$derived`, `$props`) for state.
-- **SSR with `@sveltejs/adapter-node`** (frontend runs as a Node server / ECS container behind the ALB),
-  **not** static S3. Rationale: the brief requires **SvelteKit form actions** (create activity, accept
-  invite, connect integration) and secure **httpOnly-cookie JWT auth** — both need a server. All backend
-  calls happen server-side (`src/lib/server/backend.ts`), so there are no CORS concerns and the JWT never
-  reaches the browser. A pure-SPA variant on S3+CloudFront (client-side token) remains possible if static
-  hosting is required instead.
+- **Static SPA via `@sveltejs/adapter-static`** (hosted on **Amazon S3**, per the case-study brief). The
+  whole app is client-rendered (`+layout.ts` sets `ssr = false`), with an `index.html` fallback so
+  client-side routing and dynamic routes (`/challenges/[id]`) work on S3.
+- **Client-side auth:** since a static site has no server, the JWT is stored in `localStorage` and sent as a
+  `Authorization: Bearer` header by the client API module (`src/lib/api.ts`). This is the documented
+  trade-off of S3 static hosting — a Node/SSR variant could instead keep an httpOnly cookie, but the brief
+  specifies S3 for the frontend. Because the browser now calls the backend cross-origin, the services enable
+  **CORS** (`habitloop.cors.allowed-origins`, default `*`).
 - **Stencil** component library in [`../components-stencil`](../components-stencil) for reusable,
   framework-agnostic web components (`hl-progress-ring`, `hl-chart`, `hl-stat-card`, `hl-habit-card`,
   `hl-challenge-card`, `hl-partner-tile`, `hl-recommendation-card`), registered on the client in the root
   layout's `onMount`. If the library isn't built, those elements degrade gracefully and pages still work.
 
 ## Auth & routing
-- Login/register are form actions that call user-service and set an **httpOnly `hl_token` cookie**.
-- `src/hooks.server.ts` reads the cookie, exposes `locals.user`, and **guards** every route outside
-  `/login` and `/register` (redirect to `/login`), bouncing logged-in users off the auth pages.
-- Protected pages live in the `(app)` route group with a shared sidebar layout.
+- Login/register call user-service from the browser (`api.auth.*`) and store the JWT via
+  `src/lib/auth.svelte.ts` (runes state + `localStorage`).
+- The `(app)` route group has a client guard (`(app)/+layout.ts`) that redirects to `/login` when there is
+  no token. Each page loads its data in `onMount` via `src/lib/api.ts`.
 
 ## Pages (all 14 required)
 Register · Login · Onboarding · Dashboard · Habits · Activity history · Challenge feed · Challenge details
@@ -39,30 +41,35 @@ npm run build
 # 2. Install and run the SvelteKit app
 cd ../frontend
 npm install
-cp .env.example .env     # point at your running backend (defaults = local ports)
+cp .env.example .env     # VITE_* base URLs (defaults = local service ports)
 npm run dev              # http://localhost:5173
 ```
 Start the backend first (see ../RUNNING.md for the Docker Compose stack). Then open http://localhost:5173
 and register, or log in with the seeded demo user `ria@acme.com` / `Password123!`.
 
-## Build for production
+## Build for S3
 ```bash
-cd frontend && npm run build && node build    # adapter-node server on PORT (default 3000)
+cd frontend
+# point every VITE_*_SERVICE_URL at the ALB URL (see .env.example), then:
+npm run build                      # outputs static site to ./build
+aws s3 sync build/ s3://<frontend-bucket>/ --delete   # bucket name = terraform output frontend_bucket
 ```
-Containerize this `build/` output as an ECS service behind the ALB (same origin as `/api/*`).
+The S3 website URL is `terraform output frontend_url`. (S3 website endpoints are HTTP-only; HTTPS/global
+CDN would need CloudFront, which is outside the brief's resource list.)
 
 ## Project layout
 ```
 frontend/
 ├── src/
-│   ├── hooks.server.ts            # JWT cookie + route guard
 │   ├── app.css                    # design tokens (light/dark)
 │   ├── lib/
-│   │   ├── server/backend.ts      # typed server-side API client (per service)
+│   │   ├── api.ts                 # client API (Bearer header, VITE_* base URLs)
+│   │   ├── auth.svelte.ts         # client auth state (token in localStorage)
 │   │   ├── stores/toast.svelte.ts # Svelte 5 runes store
 │   │   ├── components/            # Svelte layout (Sidebar, Topbar, Toasts)
-│   │   ├── cookies.ts, jwt.ts, types.ts
+│   │   ├── jwt.ts, types.ts
 │   └── routes/
-│       ├── login/ register/ logout/
-│       └── (app)/                 # protected group (dashboard, habits, activity, challenges, …)
+│       ├── +layout.ts             # ssr=false (static SPA)
+│       ├── login/ register/
+│       └── (app)/                 # guarded group (+layout.ts), dashboard, habits, activity, challenges, …
 ```

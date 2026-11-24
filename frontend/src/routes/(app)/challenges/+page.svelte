@@ -1,16 +1,42 @@
 <script lang="ts">
   import Topbar from '$lib/components/Topbar.svelte';
-  import { enhance } from '$app/forms';
-  let { data, form } = $props();
+  import { onMount } from 'svelte';
+  import { api, ApiError } from '$lib/api';
+  import { pushToast } from '$lib/stores/toast.svelte';
+  import type { ChallengeSummary, Page } from '$lib/types';
+
+  let feed = $state<ChallengeSummary[]>([]);
+  let error = $state('');
+
+  async function load() {
+    try {
+      const f = (await api.challenges.feed()) as Page<ChallengeSummary>;
+      feed = f.content ?? [];
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : 'Failed to load challenges';
+    }
+  }
+
+  onMount(load);
+
+  async function join(id: string) {
+    try {
+      await api.challenges.join(id);
+      pushToast('Joined challenge', 'success');
+      await load();
+    } catch (e) {
+      pushToast(e instanceof ApiError ? e.message : 'Failed to join', 'error');
+    }
+  }
 </script>
 
 <Topbar title="Challenges" />
-{#if form?.error}<div class="error-banner">{form.error}</div>{/if}
+{#if error}<div class="error-banner">{error}</div>{/if}
 
 <div class="actions"><a class="btn btn-primary" href="/challenges/new">+ Create challenge</a></div>
 
 <div class="grid feed">
-  {#each data.feed.content as c (c.id)}
+  {#each feed as c (c.id)}
     <div class="card ch">
       <div class="head">
         <a href={`/challenges/${c.id}`}><strong>{c.title}</strong></a>
@@ -22,10 +48,7 @@
       <div class="ops">
         <a class="btn" href={`/challenges/${c.id}`}>View</a>
         {#if c.visibility === 'PUBLIC'}
-          <form method="POST" action="?/join" use:enhance>
-            <input type="hidden" name="challengeId" value={c.id} />
-            <button class="btn btn-primary" type="submit">Join</button>
-          </form>
+          <button class="btn btn-primary" onclick={() => join(c.id)}>Join</button>
         {/if}
       </div>
     </div>

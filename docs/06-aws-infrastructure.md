@@ -1,8 +1,18 @@
 # 06 — AWS Infrastructure & Deployment Design (Session 3)
 
 > **Not deployed.** This is the infrastructure **design** and the Terraform plan. No AWS resources have
-> been created; nothing here is claimed as a working deployment (brief rule #9). Terraform under `infra/`
-> will implement exactly this design in a later phase.
+> been created; nothing here is claimed as a working deployment (brief rule #9).
+>
+> **Revision (PDF-aligned, free-tier).** The Terraform under `infra/` was trimmed to the case-study PDF's
+> resource list and made free-tier-friendly:
+> - **Frontend → Amazon S3** static hosting (not an ECS container). ECS now runs the 6 backend services only.
+> - **No NAT Gateway** (not in the PDF): private app subnets reach AWS via **VPC endpoints** (S3 + DynamoDB
+>   gateway, ECR + Secrets Manager + CloudWatch Logs interface).
+> - **Network ACLs** added per subnet tier.
+> - **RDS** single-AZ `db.t3.micro`; **ECS** 1 task × 0.25 vCPU/0.5 GB each.
+> - The normalizer **Lambda publishes to EventBridge** (not SNS). SNS remains only for CloudWatch alarm
+>   notifications.
+> - Backend services enable **CORS** (browser → ALB cross-origin from the S3 site).
 
 Rendered topology: see diagram 5 in [03-diagrams.md](03-diagrams.md).
 
@@ -14,13 +24,13 @@ Rendered topology: see diagram 5 in [03-diagrams.md](03-diagrams.md).
 |----------|--------|
 | **VPC** | `10.0.0.0/16`, DNS hostnames + resolution enabled. |
 | **AZs** | 2 (e.g. `ap-south-1a`, `ap-south-1b`) for HA. |
-| **Public subnets** | `10.0.0.0/24`, `10.0.1.0/24` — ALB, NAT GW, IGW. |
+| **Public subnets** | `10.0.0.0/24`, `10.0.1.0/24` — ALB, IGW. |
 | **Private app subnets** | `10.0.10.0/24`, `10.0.11.0/24` — ECS Fargate tasks (no public IP). |
 | **Private data subnets** | `10.0.20.0/24`, `10.0.21.0/24` — RDS; isolated, no internet route. |
 | **Internet Gateway** | attached to VPC; default route for public subnets. |
-| **NAT Gateway** | in a public subnet; egress for private app subnets (pull images, call AWS APIs). |
-| **VPC endpoints** | DynamoDB (gateway endpoint), ECR, Secrets Manager, CloudWatch Logs (interface endpoints) so traffic stays on the AWS backbone. |
-| **Route tables** | public → IGW; app → NAT; data → local only. |
+| **VPC endpoints (no NAT)** | S3 + DynamoDB (gateway), ECR api/dkr + Secrets Manager + CloudWatch Logs (interface) — private egress without a NAT Gateway. |
+| **Network ACLs** | per tier (public / app / data) in addition to security groups. |
+| **Route tables** | public → IGW; app → local + endpoints; data → local only. |
 
 ---
 

@@ -1,17 +1,33 @@
 <script lang="ts">
   import Topbar from '$lib/components/Topbar.svelte';
-  let { data } = $props();
+  import { onMount } from 'svelte';
+  import { api, ApiError } from '$lib/api';
+  import type { ActivityLog, Page } from '$lib/types';
+
+  let activity = $state<ActivityLog[]>([]);
+  let error = $state('');
   const fmt = (iso: string) => new Date(iso).toLocaleString();
+
+  onMount(async () => {
+    try {
+      const a = (await api.activity.log()) as Page<ActivityLog>;
+      activity = a.content ?? [];
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : 'Failed to load activity';
+    }
+  });
 </script>
 
 <Topbar title="Activity history" />
 
+{#if error}<div class="error-banner">{error}</div>{/if}
+
 <div class="card">
-  {#if data.activity.content.length}
+  {#if activity.length}
     <table>
       <thead><tr><th>When</th><th>Type</th><th>Value</th><th>Source</th></tr></thead>
       <tbody>
-        {#each data.activity.content as a (a.id)}
+        {#each activity as a (a.id)}
           <tr>
             <td>{fmt(a.occurredAt)}</td>
             <td>{a.activityType}</td>

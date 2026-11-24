@@ -100,10 +100,12 @@ normalization code (AS-13), so the same end-to-end flow is demonstrable without 
   (progress ring, chart widget, partner tile, etc.) — consumable by SvelteKit or any framework.
   Svelte-specific layout pieces that compose those elements stay as Svelte components in
   `src/lib/components/`.
-- **Server interaction:** **SvelteKit form actions** for create-activity, accept-invite, connect-integration
-  (progressive enhancement); `load` functions + `fetch` for data pages; a typed API client in `src/lib/api`.
-- **Auth:** JWT stored in an `httpOnly` cookie set by a SvelteKit server hook; protected routes guarded in
-  `hooks.server.ts` + `+layout.server.ts`.
+- **Server interaction:** the app is a **static SPA** (adapter-static → S3, per the PDF). Data loads in
+  `onMount` and create/accept/connect actions call a typed browser API client (`src/lib/api.ts`) directly.
+  > Original design used SSR + form actions; moved to a static S3 SPA to match the Session 3 brief (S3 for
+  > the frontend). See `frontend/README.md`.
+- **Auth:** JWT held client-side (`localStorage`, `src/lib/auth.svelte.ts`) and sent as a Bearer header;
+  the `(app)` route group is guarded by `(app)/+layout.ts`. Backend services enable CORS for the S3 origin.
 - **States:** every data view handles loading / empty / error / success explicitly.
 - **Live updates:** after a form action or a received device event, affected stores are invalidated so
   dashboards re-render (SvelteKit `invalidate` + optional SSE/poll for device events).

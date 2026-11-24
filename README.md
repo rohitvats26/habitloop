@@ -11,7 +11,7 @@ This repository answers the three assignment sessions end to end:
 | Session | Scope | Where | Verified |
 |---|---|---|---|
 | **1 — Microservices Design** | 6 Spring Boot services + shared `common`, DB-per-service, event-driven, multi-tenancy, JWT/RBAC | [`backend/`](backend/) | ✅ `mvn test` → **54 unit/integration tests pass** |
-| **2 — Frontend Design** | SvelteKit (Svelte 5 Runes) app, 14 pages, httpOnly-cookie auth, form actions + 7 Stencil web components | [`frontend/`](frontend/), [`components-stencil/`](components-stencil/) | ⚠️ Code complete; `npm`-build locally (Node not available in the build env) |
+| **2 — Frontend Design** | SvelteKit (Svelte 5 Runes) **static SPA** for S3, 14 pages, client-side JWT auth + 7 Stencil web components | [`frontend/`](frontend/), [`components-stencil/`](components-stencil/) | ⚠️ Code complete; `npm`-build locally (Node not available in the build env) |
 | **3 — AWS Deployment & Security** | Terraform (9 modules), ECS Fargate, RDS, DynamoDB, EventBridge + Lambda, Secrets Manager, CloudWatch | [`infra/`](infra/), [`backend/lambda-normalizer/`](backend/lambda-normalizer/) | ✅ `terraform validate` → **valid**; **not deployed** (no AWS account) |
 
 > **Honest status.** Backend compiles and its tests pass. The frontend and Stencil library are complete
@@ -39,7 +39,7 @@ habitloop/
 │   ├── analytics-service/        aggregated stats/trends                 (DynamoDB)
 │   ├── recommendation-service/   heuristic recommendations               (reads analytics)
 │   └── lambda-normalizer/        partner-event normalizer (local consumer + AWS Lambda handler)
-├── frontend/                     SvelteKit (adapter-node SSR) — 14 pages, cookie auth, form actions
+├── frontend/                     SvelteKit static SPA (adapter-static → S3) — 14 pages, client JWT auth
 ├── components-stencil/           @habitloop/components — 7 Stencil web components
 └── infra/                        Terraform (Session 3)
     ├── modules/                  network, alb, ecs, rds, dynamodb, ecr, secrets, eventbridge, observability
@@ -91,8 +91,8 @@ Two interaction styles — **synchronous** (REST, circuit-breaker protected) for
 **asynchronous** (events) for propagation and decoupling:
 
 **Synchronous (REST):**
-- The **SvelteKit frontend** (BFF) is the only client-facing surface; it calls every backend service
-  server-side and never exposes the JWT to the browser.
+- The **SvelteKit static SPA** (on S3) calls the backend services from the browser via the ALB, sending the
+  JWT as a Bearer token; services enable CORS for the S3 origin.
 - **challenge-service → user-service** `/internal/users/*` — verify a user exists in the same tenant before
   inviting (Resilience4j `@CircuitBreaker` with a fallback).
 - **recommendation-service → analytics-service** — pull the user's aggregated patterns on demand (also
@@ -155,8 +155,10 @@ Deploy steps and intentional gaps (MSK/Kafka, HTTPS/ACM, internal routing): [inf
 - **Web components:** Stencil (over Lit) — compiler emitting standards-based, framework-agnostic custom
   elements with typed props, lazy-loading and a generated loader; a good fit for a design-system library
   consumed by SvelteKit.
-- **Frontend rendering:** SvelteKit **SSR (adapter-node)** over an S3 static build — needed for form
-  actions and secure **httpOnly-cookie** JWT auth (no token in client JS). Documented in `frontend/README.md`.
+- **Frontend hosting:** SvelteKit **static SPA (adapter-static) on Amazon S3**, per the case-study brief.
+  The browser calls the backend cross-origin via the ALB, so the JWT is a client-side Bearer token and the
+  services enable **CORS**. (A Node/SSR + httpOnly-cookie variant is possible but the brief specifies S3.)
+  Documented in `frontend/README.md`.
 - **IaC:** Terraform (over CloudFormation) — modular, provider-agnostic, easier to read/review.
 - **Multi-tenancy:** shared-schema with a `tenant_id` discriminator + Hibernate `@Filter`, enabled per
   transaction via an AOP aspect, driven by a `TenantContext` populated from the JWT. (Rationale in doc 08.)

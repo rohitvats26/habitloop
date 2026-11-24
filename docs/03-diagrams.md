@@ -3,6 +3,13 @@
 All ten required diagrams, each followed by a plain-language explanation. These render on GitHub and in
 any Mermaid-aware viewer.
 
+> **Revision note.** A few diagrams below show the frontend as an SSR app with `hooks.server.ts` + httpOnly
+> cookies and an API gateway. The implementation was revised to match the Session 3 brief: the frontend is a
+> **static SPA on Amazon S3** (client-side JWT, CORS to the backend), and routing is done by the **ALB**
+> (no standalone gateway). The network topology is in
+> [diagrams/network-architecture.drawio](diagrams/network-architecture.drawio); see
+> [06-aws-infrastructure.md](06-aws-infrastructure.md) and `frontend/README.md`.
+
 ---
 
 ## 1. Overall system architecture

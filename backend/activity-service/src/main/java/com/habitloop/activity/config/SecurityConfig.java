@@ -35,7 +35,7 @@ public class SecurityConfig {
                                            ObjectMapper objectMapper) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(AbstractHttpConfigurer::disable)
+                .cors(org.springframework.security.config.Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_PATHS).permitAll()
@@ -45,5 +45,19 @@ public class SecurityConfig {
                         .accessDeniedHandler(new RestAccessDeniedHandler(objectMapper)))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    @Bean
+    org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource(
+            @org.springframework.beans.factory.annotation.Value("${habitloop.cors.allowed-origins:*}") String origins) {
+        org.springframework.web.cors.CorsConfiguration cfg = new org.springframework.web.cors.CorsConfiguration();
+        cfg.setAllowedOriginPatterns(java.util.Arrays.stream(origins.split(",")).map(String::trim).toList());
+        cfg.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        cfg.setAllowedHeaders(java.util.List.of("*"));
+        cfg.setMaxAge(3600L);
+        org.springframework.web.cors.UrlBasedCorsConfigurationSource src =
+                new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+        src.registerCorsConfiguration("/**", cfg);
+        return src;
     }
 }

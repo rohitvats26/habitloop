@@ -1,12 +1,18 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
+  import { logout } from '$lib/auth.svelte';
+
   let { title }: { title: string } = $props();
+
+  async function doLogout() {
+    logout();
+    await goto('/login');
+  }
 </script>
 
 <header class="topbar">
   <h1>{title}</h1>
-  <form method="POST" action="/logout">
-    <button class="btn" type="submit">Log out</button>
-  </form>
+  <button class="btn" type="button" onclick={doLogout}>Log out</button>
 </header>
 
 <style>
