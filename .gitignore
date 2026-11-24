@@ -1,0 +1,51 @@
+# ---- Secrets / env (never commit) ----
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.p12
+
+# ---- Java / Maven ----
+target/
+*.class
+*.jar
+*.war
+!**/.mvn/wrapper/maven-wrapper.jar
+.mvn/
+dependency-reduced-pom.xml
+
+# ---- Node / SvelteKit / Stencil ----
+node_modules/
+.svelte-kit/
+build/
+dist/
+dist-custom-elements/
+www/
+.loader/
+*.tsbuildinfo
+.stencil/
+
+# ---- Terraform ----
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
+
+# ---- Docker ----
+*.local.yml
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
