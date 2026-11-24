@@ -1,0 +1,55 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: activity-service
+  datasource:
+    url: ${ACTIVITY_DB_URL:jdbc:postgresql://localhost:5432/habitloop_activity}
+    username: ${ACTIVITY_DB_USER:habitloop}
+    password: ${ACTIVITY_DB_PASSWORD:habitloop}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: activity-service
+      auto-offset-reset: earliest
+
+habitloop:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-change-me-habitloop-secret-key-min-32-bytes}
+    issuer: habitloop
+    access-token-seconds: 3600
+    refresh-token-seconds: 1209600
+  kafka:
+    # Turn on to publish activity.logged and consume partner.activity.normalized.
+    enabled: ${KAFKA_ENABLED:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.habitloop: INFO

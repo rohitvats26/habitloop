@@ -1,0 +1,45 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: analytics-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: analytics-service
+      auto-offset-reset: earliest
+
+habitloop:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-change-me-habitloop-secret-key-min-32-bytes}
+    issuer: habitloop
+    access-token-seconds: 3600
+    refresh-token-seconds: 1209600
+  kafka:
+    enabled: ${KAFKA_ENABLED:false}
+  analytics:
+    # "memory" (dev default, no AWS needed) or "dynamodb" (AWS).
+    store: ${ANALYTICS_STORE:memory}
+    table-name: ${ANALYTICS_TABLE:habitloop-analytics}
+    # Set to http://localhost:8000 to use DynamoDB Local.
+    dynamo-endpoint: ${DYNAMO_ENDPOINT:}
+    region: ${AWS_REGION:ap-south-1}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.habitloop: INFO

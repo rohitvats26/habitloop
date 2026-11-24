@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: lambda-normalizer
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: lambda-normalizer
+      auto-offset-reset: earliest
+
+logging:
+  level:
+    com.habitloop: INFO
