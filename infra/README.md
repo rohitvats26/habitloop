@@ -72,9 +72,10 @@ Fargate (~7 small tasks) and the ALB have no free tier, so a short-lived demo ke
 - **HTTPS/TLS:** the ALB listener is HTTP:80 by default; set `certificate_arn` (needs a domain + ACM cert)
   to add an HTTPS:443 listener with an 80→443 redirect. The **S3 website endpoint is HTTP-only** — true
   HTTPS for the static site would need **CloudFront**, which is outside the PDF's resource list.
-- **Internal event chain on AWS:** services run with `KAFKA_ENABLED=false`. The Lambda normalizer publishes
-  `partner.activity.normalized` back to EventBridge; wiring the services to consume internal events over
-  EventBridge (so the deployed analytics→recommendation flow runs end-to-end) is the documented next step.
+- **Internal event chain on AWS:** implemented over **EventBridge + SQS** (`EVENTS_TRANSPORT=eventbridge`).
+  Services PutEvents to the bus; each consumer long-polls its own SQS queue (EventBridge rule → SQS), and the
+  Lambda normalizer publishes `partner.activity.normalized` back to the bus — so the deployed
+  activity→analytics→recommendation flow runs end-to-end (no MSK needed). Kafka is only the local transport.
 - **Service-to-service calls** use the public ALB DNS for simplicity; production would use an internal ALB or
   ECS Service Connect / Cloud Map and keep `/internal/*` off the public listener.
 - **CORS** defaults to `*` (`habitloop.cors.allowed-origins`); tighten to the S3 website origin for production.

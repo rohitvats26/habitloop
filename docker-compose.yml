@@ -70,7 +70,7 @@ services:
       ACTIVITY_DB_USER: habitloop
       ACTIVITY_DB_PASSWORD: habitloop
       KAFKA_BOOTSTRAP: kafka:9092
-      KAFKA_ENABLED: "true"
+      EVENTS_TRANSPORT: kafka
     depends_on:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
@@ -86,7 +86,7 @@ services:
       CHALLENGE_DB_USER: habitloop
       CHALLENGE_DB_PASSWORD: habitloop
       KAFKA_BOOTSTRAP: kafka:9092
-      KAFKA_ENABLED: "true"
+      EVENTS_TRANSPORT: kafka
       USER_SERVICE_URL: http://user-service:8081
     depends_on:
       postgres: { condition: service_healthy }
@@ -103,7 +103,7 @@ services:
       INTEGRATION_DB_USER: habitloop
       INTEGRATION_DB_PASSWORD: habitloop
       KAFKA_BOOTSTRAP: kafka:9092
-      KAFKA_ENABLED: "true"
+      EVENTS_TRANSPORT: kafka
       WEBHOOK_BASE_URL: http://localhost:8084
     depends_on:
       postgres: { condition: service_healthy }
@@ -117,7 +117,7 @@ services:
     environment:
       <<: *jwt
       KAFKA_BOOTSTRAP: kafka:9092
-      KAFKA_ENABLED: "true"
+      EVENTS_TRANSPORT: kafka
       ANALYTICS_STORE: memory
     depends_on:
       kafka: { condition: service_healthy }
@@ -130,7 +130,7 @@ services:
     environment:
       <<: *jwt
       KAFKA_BOOTSTRAP: kafka:9092
-      KAFKA_ENABLED: "true"
+      EVENTS_TRANSPORT: kafka
       ANALYTICS_SERVICE_URL: http://analytics-service:8085
     depends_on:
       kafka: { condition: service_healthy }

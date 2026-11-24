@@ -16,7 +16,7 @@ import java.time.OffsetDateTime;
  * {@code habitloop.kafka.enabled=true}.
  */
 @Component
-@ConditionalOnProperty(name = "habitloop.kafka.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "habitloop.events.transport", havingValue = "kafka")
 public class AnalyticsActivityConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(AnalyticsActivityConsumer.class);

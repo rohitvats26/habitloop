@@ -17,7 +17,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * raised and simply not forwarded.
  */
 @Component
-@ConditionalOnProperty(name = "habitloop.kafka.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "habitloop.events.transport", havingValue = "kafka")
 public class KafkaActivityPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaActivityPublisher.class);

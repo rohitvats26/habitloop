@@ -23,7 +23,8 @@ locals {
   }
 
   common_backend_env = {
-    KAFKA_ENABLED = "false" # set true + KAFKA_BOOTSTRAP when an MSK cluster is added (see README)
+    EVENTS_TRANSPORT = "eventbridge" # EventBridge + SQS transport on AWS (kafka is for local Compose)
+    EVENT_BUS_NAME   = module.eventbridge.bus_name
   }
 
   ecs_services = {
@@ -35,13 +36,13 @@ locals {
     }
     "activity-service" = {
       image            = local.images["activity-service"], port = 8082, cpu = 256, memory = 512, desired_count = 1
-      environment      = merge(local.common_backend_env, { ACTIVITY_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_activity", ACTIVITY_DB_USER = "habitloop" })
+      environment      = merge(local.common_backend_env, { ACTIVITY_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_activity", ACTIVITY_DB_USER = "habitloop", EVENT_QUEUE_URL = module.eventbridge.queue_urls["activity"] })
       secrets          = { ACTIVITY_DB_PASSWORD = local.db_pwd_ref }
       target_group_arn = module.alb.target_group_arns["activity-service"]
     }
     "challenge-service" = {
       image            = local.images["challenge-service"], port = 8083, cpu = 256, memory = 512, desired_count = 1
-      environment      = merge(local.common_backend_env, { CHALLENGE_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_challenge", CHALLENGE_DB_USER = "habitloop", USER_SERVICE_URL = local.alb_dns })
+      environment      = merge(local.common_backend_env, { CHALLENGE_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_challenge", CHALLENGE_DB_USER = "habitloop", USER_SERVICE_URL = local.alb_dns, EVENT_QUEUE_URL = module.eventbridge.queue_urls["challenge"] })
       secrets          = { CHALLENGE_DB_PASSWORD = local.db_pwd_ref }
       target_group_arn = module.alb.target_group_arns["challenge-service"]
     }
@@ -53,13 +54,13 @@ locals {
     }
     "analytics-service" = {
       image            = local.images["analytics-service"], port = 8085, cpu = 256, memory = 512, desired_count = 1
-      environment      = merge(local.common_backend_env, { ANALYTICS_STORE = "dynamodb", ANALYTICS_TABLE = module.dynamodb.table_name, AWS_REGION = var.region })
+      environment      = merge(local.common_backend_env, { ANALYTICS_STORE = "dynamodb", ANALYTICS_TABLE = module.dynamodb.table_name, AWS_REGION = var.region, EVENT_QUEUE_URL = module.eventbridge.queue_urls["analytics"] })
       secrets          = {}
       target_group_arn = module.alb.target_group_arns["analytics-service"]
     }
     "recommendation-service" = {
       image            = local.images["recommendation-service"], port = 8086, cpu = 256, memory = 512, desired_count = 1
-      environment      = merge(local.common_backend_env, { ANALYTICS_SERVICE_URL = local.alb_dns })
+      environment      = merge(local.common_backend_env, { ANALYTICS_SERVICE_URL = local.alb_dns, EVENT_QUEUE_URL = module.eventbridge.queue_urls["recommendation"] })
       secrets          = {}
       target_group_arn = module.alb.target_group_arns["recommendation-service"]
     }
@@ -146,6 +147,8 @@ module "ecs" {
   extra_secret_arns  = [module.rds.master_secret_arn]
   dynamodb_table_arn = module.dynamodb.table_arn
   secrets_arn_prefix = local.secrets_prefix
+  event_bus_arn      = module.eventbridge.bus_arn
+  event_queue_arns   = module.eventbridge.queue_arns
 }
 
 module "eventbridge" {

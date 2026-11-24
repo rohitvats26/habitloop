@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * so replays never create duplicate logs (NFR-2). Active only when {@code habitloop.kafka.enabled=true}.
  */
 @Component
-@ConditionalOnProperty(name = "habitloop.kafka.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "habitloop.events.transport", havingValue = "kafka")
 public class PartnerActivityConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(PartnerActivityConsumer.class);

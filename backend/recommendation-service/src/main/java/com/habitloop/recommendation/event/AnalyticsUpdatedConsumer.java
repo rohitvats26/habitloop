@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * before the TTL expires. Active only when {@code habitloop.kafka.enabled=true}.
  */
 @Component
-@ConditionalOnProperty(name = "habitloop.kafka.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "habitloop.events.transport", havingValue = "kafka")
 public class AnalyticsUpdatedConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(AnalyticsUpdatedConsumer.class);

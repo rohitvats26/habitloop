@@ -32,9 +32,12 @@ habitloop:
     issuer: habitloop
     access-token-seconds: 3600
     refresh-token-seconds: 1209600
-  kafka:
-    # Turn on to publish activity.logged and consume partner.activity.normalized.
-    enabled: ${KAFKA_ENABLED:false}
+  events:
+    # Event transport: kafka (local Docker Compose) | eventbridge (AWS) | none (tests / no broker).
+    transport: ${EVENTS_TRANSPORT:none}
+    source: habitloop.activity
+    bus-name: ${EVENT_BUS_NAME:}
+    queue-url: ${EVENT_QUEUE_URL:}        # SQS queue fed by the partner.activity.normalized rule
 
 management:
   endpoints:

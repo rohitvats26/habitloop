@@ -12,6 +12,9 @@
 > - **RDS** single-AZ `db.t3.micro`; **ECS** 1 task × 0.25 vCPU/0.5 GB each.
 > - The normalizer **Lambda publishes to EventBridge** (not SNS). SNS remains only for CloudWatch alarm
 >   notifications.
+> - **Internal events run over EventBridge + SQS** (`EVENTS_TRANSPORT=eventbridge`): services PutEvents to the
+>   bus, and each consumer long-polls its own SQS queue (EventBridge rule → SQS). No MSK/Kafka on AWS; Kafka is
+>   the local-Compose transport only.
 > - Backend services enable **CORS** (browser → ALB cross-origin from the S3 site).
 
 Rendered topology: see diagram 5 in [03-diagrams.md](03-diagrams.md).

@@ -27,6 +27,16 @@ variable "extra_secret_arns" {
   default     = []
 }
 variable "dynamodb_table_arn" { type = string }
+variable "event_bus_arn" {
+  type        = string
+  default     = ""
+  description = "EventBridge bus ARN the tasks may PutEvents to"
+}
+variable "event_queue_arns" {
+  type        = list(string)
+  default     = []
+  description = "SQS consumer queue ARNs the tasks may receive/delete from"
+}
 variable "secrets_arn_prefix" {
   type        = string
   description = "ARN pattern the task role may read (per-connection HMAC secrets)"

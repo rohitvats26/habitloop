@@ -32,8 +32,11 @@ habitloop:
     issuer: habitloop
     access-token-seconds: 3600
     refresh-token-seconds: 1209600
-  kafka:
-    enabled: ${KAFKA_ENABLED:false}
+  events:
+    transport: ${EVENTS_TRANSPORT:none}   # kafka | eventbridge | none
+    source: habitloop.challenge
+    bus-name: ${EVENT_BUS_NAME:}
+    queue-url: ${EVENT_QUEUE_URL:}         # SQS queue fed by the activity.logged rule
   clients:
     user-service:
       url: ${USER_SERVICE_URL:http://localhost:8081}

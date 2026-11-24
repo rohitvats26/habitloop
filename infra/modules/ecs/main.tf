@@ -49,23 +49,41 @@ resource "aws_iam_role" "task" {
   tags               = var.tags
 }
 
+locals {
+  task_base_statements = [
+    {
+      Effect   = "Allow"
+      Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:UpdateItem"]
+      Resource = [var.dynamodb_table_arn, "${var.dynamodb_table_arn}/index/*"]
+    },
+    {
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue", "secretsmanager:CreateSecret", "secretsmanager:PutSecretValue"]
+      Resource = [var.secrets_arn_prefix]
+    }
+  ]
+  task_events_statements = var.event_bus_arn == "" ? [] : [
+    {
+      Effect   = "Allow"
+      Action   = ["events:PutEvents"]
+      Resource = [var.event_bus_arn]
+    }
+  ]
+  task_sqs_statements = length(var.event_queue_arns) == 0 ? [] : [
+    {
+      Effect   = "Allow"
+      Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+      Resource = var.event_queue_arns
+    }
+  ]
+}
+
 resource "aws_iam_role_policy" "task_app" {
   name = "app-permissions"
   role = aws_iam_role.task.id
   policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:UpdateItem"]
-        Resource = [var.dynamodb_table_arn, "${var.dynamodb_table_arn}/index/*"]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue", "secretsmanager:CreateSecret", "secretsmanager:PutSecretValue"]
-        Resource = [var.secrets_arn_prefix]
-      }
-    ]
+    Version   = "2012-10-17"
+    Statement = concat(local.task_base_statements, local.task_events_statements, local.task_sqs_statements)
   })
 }
 

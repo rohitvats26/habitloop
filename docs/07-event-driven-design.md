@@ -5,12 +5,19 @@ mechanisms (timeouts, circuit breakers, retries, DLQ). It directly addresses NFR
 
 ---
 
+> **Implementation note — pluggable transport (`EVENTS_TRANSPORT`).** The event backbone is abstracted so
+> the same envelope and handlers run over either transport: **`kafka`** locally (Docker Compose) and
+> **`eventbridge`** on AWS. On AWS there is **no MSK** — services PutEvents to a single EventBridge bus, and
+> each consumer long-polls its own **SQS** queue (one EventBridge rule per event type → SQS target). This
+> unifies the two planes below onto EventBridge in production. See
+> [06-aws-infrastructure.md](06-aws-infrastructure.md) and `common/event/eventbridge/`.
+
 ## 1. Two event planes
 
-| Plane | Transport | Used for |
-|-------|-----------|----------|
-| **Internal** | Kafka (MSK in AWS) | domain events between HabitLoop services |
-| **External** | EventBridge → Lambda | partner/wearable events entering the system |
+| Plane | Transport (local / AWS) | Used for |
+|-------|-------------------------|----------|
+| **Internal** | Kafka / **EventBridge + SQS** | domain events between HabitLoop services |
+| **External** | Kafka / **EventBridge → Lambda** | partner/wearable events entering the system |
 
 They meet at Activity Service: the Lambda's normalized output becomes the internal `activity.logged` flow.
 

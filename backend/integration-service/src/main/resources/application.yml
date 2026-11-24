@@ -29,8 +29,10 @@ habitloop:
     issuer: habitloop
     access-token-seconds: 3600
     refresh-token-seconds: 1209600
-  kafka:
-    enabled: ${KAFKA_ENABLED:false}
+  events:
+    transport: ${EVENTS_TRANSPORT:none}   # kafka | eventbridge | none
+    source: habitloop.integration
+    bus-name: ${EVENT_BUS_NAME:}           # publishes partner.event.received
   integration:
     webhook-base-url: ${WEBHOOK_BASE_URL:http://localhost:8084}
 

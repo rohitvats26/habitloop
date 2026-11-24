@@ -47,6 +47,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- EventBridge/SQS transport (active only when habitloop.events.transport=eventbridge). -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>eventbridge</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sqs</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>

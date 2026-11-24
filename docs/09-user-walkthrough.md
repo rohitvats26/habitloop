@@ -122,11 +122,13 @@ mark done → activity.logged → analytics upserts (DynamoDB) → analytics.upd
   so existence isn't leaked.
 - Completions, webhook events, and analytics upserts are all **idempotent**, so retries/replays are safe.
 
-## AWS variant (honest note)
-On AWS the event chain needs a broker. In the current Terraform the services run with
-`KAFKA_ENABLED=false` and **no MSK**, so on a raw cloud deploy Steps 5–7 would not auto-populate. To make
-this exact walkthrough work in the cloud, enable one of: an **MSK** cluster, **EventBridge** for the
-internal events (preferred — cheaper, already used for partner events), or **synchronous** service calls.
-This is tracked in [infra/README.md](../infra/README.md) under known gaps. Locally (Compose,
-`KAFKA_ENABLED=true`) the full loop works today — see [RUNNING.md](../RUNNING.md) and
-`scripts/smoke-test.sh`.
+## Event transport (local vs AWS)
+The same event loop runs over a pluggable transport, chosen by `EVENTS_TRANSPORT`:
+- **Local (Docker Compose):** `EVENTS_TRANSPORT=kafka` — services publish/consume via Kafka; the local
+  normalizer bridges `partner.event.received → partner.activity.normalized`.
+- **AWS:** `EVENTS_TRANSPORT=eventbridge` — services **PutEvents** to the EventBridge bus; each consumer
+  long-polls its own **SQS** queue (EventBridge rule → SQS), and the **Lambda** normalizer publishes
+  `partner.activity.normalized` back to the bus. So Steps 4–7 run end-to-end on the deployed app, not just
+  locally. See [06-aws-infrastructure.md](06-aws-infrastructure.md) and [infra/README.md](../infra/README.md).
+
+Run it locally via [RUNNING.md](../RUNNING.md) and `scripts/smoke-test.sh`.
