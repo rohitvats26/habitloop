@@ -1,0 +1,270 @@
+{
+  "info": {
+    "name": "HabitLoop API",
+    "_postman_id": "habitloop-collection-0001",
+    "description": "HabitLoop multi-tenant activity platform — all 6 microservices.\n\nThere is NO API gateway; each service is called on its own port (routing is done by the ALB on AWS and by the SvelteKit server locally). Base URLs are variables (userBase, activityBase, ...). Run **Auth > Login** first — its test script stores {{accessToken}} automatically, which every other request uses as a Bearer token.\n\nThe partner webhook is HMAC-SHA256 signed; its pre-request script computes X-HL-Signature from the raw body using {{hmacSecret}} (set it from the 'Create connection' response).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "userBase", "value": "http://localhost:8081" },
+    { "key": "activityBase", "value": "http://localhost:8082" },
+    { "key": "challengeBase", "value": "http://localhost:8083" },
+    { "key": "integrationBase", "value": "http://localhost:8084" },
+    { "key": "analyticsBase", "value": "http://localhost:8085" },
+    { "key": "recommendationBase", "value": "http://localhost:8086" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "habitId", "value": "" },
+    { "key": "challengeId", "value": "" },
+    { "key": "connectionId", "value": "" },
+    { "key": "hmacSecret", "value": "" },
+    { "key": "hmacSig", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "1. Auth (user-service)",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{userBase}}/api/auth/register", "host": ["{{userBase}}"], "path": ["api", "auth", "register"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"ria@acme.com\",\n  \"password\": \"Password123!\",\n  \"displayName\": \"Ria\",\n  \"timezone\": \"Asia/Kolkata\",\n  \"tenantName\": \"Acme Wellness\"\n}" }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.accessToken) { pm.collectionVariables.set('accessToken', json.accessToken); }",
+                  "if (json.refreshToken) { pm.collectionVariables.set('refreshToken', json.refreshToken); }",
+                  "pm.test('got access token', () => pm.expect(json.accessToken).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{userBase}}/api/auth/login", "host": ["{{userBase}}"], "path": ["api", "auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"ria@acme.com\",\n  \"password\": \"Password123!\"\n}" }
+          }
+        },
+        {
+          "name": "Refresh token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{userBase}}/api/auth/refresh", "host": ["{{userBase}}"], "path": ["api", "auth", "refresh"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Users & Tenant (user-service)",
+      "item": [
+        {
+          "name": "Get my profile",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{userBase}}/api/users/me", "host": ["{{userBase}}"], "path": ["api", "users", "me"] } }
+        },
+        {
+          "name": "Update my profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{userBase}}/api/users/me", "host": ["{{userBase}}"], "path": ["api", "users", "me"] },
+            "body": { "mode": "raw", "raw": "{\n  \"displayName\": \"Ria K\",\n  \"timezone\": \"Asia/Kolkata\"\n}" }
+          }
+        },
+        {
+          "name": "Get my tenant",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{userBase}}/api/tenants/me", "host": ["{{userBase}}"], "path": ["api", "tenants", "me"] } }
+        }
+      ]
+    },
+    {
+      "name": "3. Habits & Activity (activity-service)",
+      "item": [
+        {
+          "name": "Create habit",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "const j = pm.response.json();",
+                "if (j.id) pm.collectionVariables.set('habitId', j.id);"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{activityBase}}/api/habits", "host": ["{{activityBase}}"], "path": ["api", "habits"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Morning run\",\n  \"description\": \"5k jog\",\n  \"frequency\": \"CUSTOM\",\n  \"schedule\": { \"daysOfWeek\": [1,3,5], \"targetTime\": \"07:00\", \"perWeek\": 3 },\n  \"targetPerPeriod\": 3\n}" }
+          }
+        },
+        {
+          "name": "List my habits",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{activityBase}}/api/habits?page=0&size=20", "host": ["{{activityBase}}"], "path": ["api", "habits"], "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }] } }
+        },
+        {
+          "name": "Get habit (+streak)",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{activityBase}}/api/habits/{{habitId}}", "host": ["{{activityBase}}"], "path": ["api", "habits", "{{habitId}}"] } }
+        },
+        {
+          "name": "Mark complete (done)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{activityBase}}/api/habits/{{habitId}}/completions", "host": ["{{activityBase}}"], "path": ["api", "habits", "{{habitId}}", "completions"] },
+            "body": { "mode": "raw", "raw": "{\n  \"date\": \"2026-11-24\",\n  \"note\": \"felt great\"\n}" }
+          }
+        },
+        {
+          "name": "Completion history",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{activityBase}}/api/habits/{{habitId}}/completions?page=0&size=20", "host": ["{{activityBase}}"], "path": ["api", "habits", "{{habitId}}", "completions"], "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }] } }
+        },
+        {
+          "name": "Activity log",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{activityBase}}/api/activity?page=0&size=20", "host": ["{{activityBase}}"], "path": ["api", "activity"], "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }] } }
+        }
+      ]
+    },
+    {
+      "name": "4. Challenges (challenge-service)",
+      "item": [
+        {
+          "name": "Create challenge",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "const j = pm.response.json();",
+              "if (j.id) pm.collectionVariables.set('challengeId', j.id);"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{challengeBase}}/api/challenges", "host": ["{{challengeBase}}"], "path": ["api", "challenges"] },
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"30-day Move\",\n  \"description\": \"Move every day for 30 days\",\n  \"visibility\": \"PUBLIC\",\n  \"metric\": \"DAYS_COMPLETED\",\n  \"target\": 30,\n  \"startsOn\": \"2026-12-01\",\n  \"endsOn\": \"2026-12-30\"\n}" }
+          }
+        },
+        {
+          "name": "Challenge feed",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{challengeBase}}/api/challenges?status=ACTIVE", "host": ["{{challengeBase}}"], "path": ["api", "challenges"], "query": [{ "key": "status", "value": "ACTIVE" }] } }
+        },
+        {
+          "name": "Challenge details (+leaderboard)",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{challengeBase}}/api/challenges/{{challengeId}}", "host": ["{{challengeBase}}"], "path": ["api", "challenges", "{{challengeId}}"] } }
+        },
+        {
+          "name": "Join challenge",
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{challengeBase}}/api/challenges/{{challengeId}}/join", "host": ["{{challengeBase}}"], "path": ["api", "challenges", "{{challengeId}}", "join"] } }
+        },
+        {
+          "name": "My invitations",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{challengeBase}}/api/invitations", "host": ["{{challengeBase}}"], "path": ["api", "invitations"] } }
+        }
+      ]
+    },
+    {
+      "name": "5. Integrations & Webhook (integration-service)",
+      "item": [
+        {
+          "name": "Create connection",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "const j = pm.response.json();",
+              "if (j.connectionId) pm.collectionVariables.set('connectionId', j.connectionId);",
+              "if (j.hmacSecret) pm.collectionVariables.set('hmacSecret', j.hmacSecret);",
+              "console.log('Set hmacSecret from response; use it for the webhook request.');"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{integrationBase}}/api/integrations/connections", "host": ["{{integrationBase}}"], "path": ["api", "integrations", "connections"] },
+            "body": { "mode": "raw", "raw": "{\n  \"partner\": \"FITBIT\"\n}" }
+          }
+        },
+        {
+          "name": "List connections",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{integrationBase}}/api/integrations/connections", "host": ["{{integrationBase}}"], "path": ["api", "integrations", "connections"] } }
+        },
+        {
+          "name": "Partner webhook (HMAC-signed)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Compute X-HL-Signature = hex(HMAC-SHA256(rawBody, hmacSecret)).",
+                  "const secret = pm.collectionVariables.get('hmacSecret');",
+                  "const body = pm.request.body.raw;",
+                  "if (!secret) { console.warn('hmacSecret empty — run Create connection first.'); }",
+                  "const sig = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.collectionVariables.set('hmacSig', sig);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-HL-Signature", "value": "{{hmacSig}}" },
+              { "key": "X-HL-Event-Id", "value": "evt_123" }
+            ],
+            "url": { "raw": "{{integrationBase}}/api/webhooks/{{connectionId}}", "host": ["{{integrationBase}}"], "path": ["api", "webhooks", "{{connectionId}}"] },
+            "body": { "mode": "raw", "raw": "{\"externalEventId\":\"evt_123\",\"type\":\"STEPS\",\"value\":8450,\"unit\":\"steps\",\"occurredAt\":\"2026-11-24T06:40:00Z\",\"userRef\":\"fitbit-user-55\"}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Analytics (analytics-service)",
+      "item": [
+        {
+          "name": "Summary",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{analyticsBase}}/api/analytics/summary", "host": ["{{analyticsBase}}"], "path": ["api", "analytics", "summary"] } }
+        },
+        {
+          "name": "Daily series",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{analyticsBase}}/api/analytics/daily?from=2026-11-01&to=2026-11-24", "host": ["{{analyticsBase}}"], "path": ["api", "analytics", "daily"], "query": [{ "key": "from", "value": "2026-11-01" }, { "key": "to", "value": "2026-11-24" }] } }
+        },
+        {
+          "name": "Weekly trend",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{analyticsBase}}/api/analytics/weekly?weeks=8", "host": ["{{analyticsBase}}"], "path": ["api", "analytics", "weekly"], "query": [{ "key": "weeks", "value": "8" }] } }
+        }
+      ]
+    },
+    {
+      "name": "7. Recommendations (recommendation-service)",
+      "item": [
+        {
+          "name": "My recommendations",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{recommendationBase}}/api/recommendations", "host": ["{{recommendationBase}}"], "path": ["api", "recommendations"] } }
+        },
+        {
+          "name": "Per-habit recommendation",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{recommendationBase}}/api/recommendations/habits/{{habitId}}", "host": ["{{recommendationBase}}"], "path": ["api", "recommendations", "habits", "{{habitId}}"] } }
+        }
+      ]
+    }
+  ]
+}
