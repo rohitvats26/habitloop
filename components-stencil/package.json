@@ -1,0 +1,30 @@
+{
+  "name": "@habitloop/components",
+  "version": "0.0.1",
+  "description": "HabitLoop reusable Stencil web components",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.js",
+  "types": "dist/types/index.d.ts",
+  "collection": "dist/collection/collection-manifest.json",
+  "collection:main": "dist/collection/index.js",
+  "unpkg": "dist/habitloop/habitloop.esm.js",
+  "exports": {
+    ".": {
+      "import": "./dist/habitloop/habitloop.esm.js",
+      "require": "./dist/habitloop/habitloop.cjs.js"
+    },
+    "./loader": {
+      "import": "./loader/index.js",
+      "require": "./loader/index.cjs",
+      "types": "./loader/index.d.ts"
+    }
+  },
+  "files": ["dist/", "loader/"],
+  "scripts": {
+    "build": "stencil build",
+    "start": "stencil build --dev --watch --serve"
+  },
+  "devDependencies": {
+    "@stencil/core": "^4.22.0"
+  }
+}
