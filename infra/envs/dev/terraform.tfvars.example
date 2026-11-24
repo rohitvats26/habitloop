@@ -1,0 +1,8 @@
+region      = "ap-south-1"
+name        = "habitloop-dev"
+azs         = ["ap-south-1a", "ap-south-1b"]
+image_tag   = "latest"
+alarm_email = "ops@example.com"
+
+# Supply via a secret mechanism / CI, not committed:
+# jwt_secret = "a-strong-32+-byte-secret"
