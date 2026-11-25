@@ -1,16 +1,18 @@
 <script lang="ts">
   import Topbar from '$lib/components/Topbar.svelte';
   import { onMount } from 'svelte';
-  import { page } from '$app/stores';
   import { api, ApiError } from '$lib/api';
   import { pushToast } from '$lib/stores/toast.svelte';
   import type { ChallengeDetail } from '$lib/types';
+  import type { PageProps } from './$types';
+
+  let { params }: PageProps = $props();
 
   let c = $state<ChallengeDetail | null>(null);
   let error = $state('');
   let inviteUserId = $state('');
 
-  const id = $derived($page.params.id);
+  const id = $derived(params.id);
 
   async function load() {
     try {

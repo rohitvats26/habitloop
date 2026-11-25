@@ -49,3 +49,8 @@ override.tf.json
 .DS_Store
 Thumbs.db
 *.log
+
+# ---- Folder ----
+postman/
+scripts/
+infra/

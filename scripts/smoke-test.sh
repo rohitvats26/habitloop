@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # HabitLoop end-to-end smoke test — drives the full workflow against the local Docker Compose stack.
-# Prereq: docker compose up (all services healthy). Needs: curl, openssl.
+# Prereq: docker compose -f backend/docker-compose.yml up (all services healthy). Needs: curl, openssl.
 # Usage: bash scripts/smoke-test.sh
 set -u
 

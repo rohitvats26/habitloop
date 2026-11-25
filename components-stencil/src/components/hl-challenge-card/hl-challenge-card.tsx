@@ -15,7 +15,7 @@ import { Component, Prop, h } from '@stencil/core';
   `
 })
 export class HlChallengeCard {
-  @Prop() title = '';
+  @Prop() challengeTitle = '';
   @Prop() visibility = 'PUBLIC';
   @Prop() progress = 0;
   @Prop() target = 1;
@@ -24,7 +24,7 @@ export class HlChallengeCard {
     const pct = this.target > 0 ? Math.min(100, Math.round((this.progress / this.target) * 100)) : 0;
     return (
       <div class="card">
-        <div class="title">{this.title} <span class="badge">{this.visibility}</span></div>
+        <div class="title">{this.challengeTitle} <span class="badge">{this.visibility}</span></div>
         <div class="track"><div class="fill" style={{ width: pct + '%' }}></div></div>
         <div class="meta">{this.progress} / {this.target} ({pct}%)</div>
       </div>

@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import type { AuthUser } from '$lib/types';
 
-  let { user }: { user?: AuthUser } = $props();
+  let { user }: { user?: AuthUser | null } = $props();
 
   const links = [
     { href: '/dashboard', label: 'Dashboard' },

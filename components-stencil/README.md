@@ -10,7 +10,7 @@ work in SvelteKit or any framework, with typed props and a generated loader.
 | `<hl-chart>` | `points` (JSON string) | minimal bar chart for trends |
 | `<hl-stat-card>` | `label`, `value` | KPI / activity-summary tile |
 | `<hl-habit-card>` | `name`, `habit-id`, `current`, `longest` | emits `hlComplete` |
-| `<hl-challenge-card>` | `title`, `visibility`, `progress`, `target` | progress bar |
+| `<hl-challenge-card>` | `challenge-title`, `visibility`, `progress`, `target` | progress bar; use `challengeTitle` as a JavaScript property instead of `title` |
 | `<hl-partner-tile>` | `partner`, `status`, `connection-id` | emits `hlRevoke` |
 | `<hl-recommendation-card>` | `type`, `headline`, `message`, `confidence` | |
 

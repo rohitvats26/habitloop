@@ -11,6 +11,10 @@ export namespace Components {
      */
     interface HlChallengeCard {
         /**
+          * @default ''
+         */
+        "challengeTitle": string;
+        /**
           * @default 0
          */
         "progress": number;
@@ -18,10 +22,6 @@ export namespace Components {
           * @default 1
          */
         "target": number;
-        /**
-          * @default ''
-         */
-        "title": string;
         /**
           * @default 'PUBLIC'
          */
@@ -235,6 +235,10 @@ declare namespace LocalJSX {
      */
     interface HlChallengeCard {
         /**
+          * @default ''
+         */
+        "challengeTitle"?: string;
+        /**
           * @default 0
          */
         "progress"?: number;
@@ -242,10 +246,6 @@ declare namespace LocalJSX {
           * @default 1
          */
         "target"?: number;
-        /**
-          * @default ''
-         */
-        "title"?: string;
         /**
           * @default 'PUBLIC'
          */
@@ -351,7 +351,7 @@ declare namespace LocalJSX {
     }
 
     interface HlChallengeCardAttributes {
-        "title": string;
+        "challengeTitle": string;
         "visibility": string;
         "progress": number;
         "target": number;

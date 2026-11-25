@@ -27,7 +27,7 @@ This repository answers the three assignment sessions end to end:
 habitloop/
 ├── README.md                     ← you are here (project index)
 ├── RUNNING.md                    local run guide (Docker Compose)
-├── docker-compose.yml            full local stack: Postgres, Kafka (KRaft), 6 services + lambda
+├── backend/docker-compose.yml    full local stack: Postgres, Kafka (KRaft), 6 services + lambda
 ├── docker/ , scripts/            Postgres init SQL, e2e smoke-test.sh
 ├── docs/                         8 design documents (Session 1–3 design)
 ├── backend/                      Maven multi-module reactor (Session 1 + Lambda for Session 3)
@@ -129,7 +129,7 @@ mvn test        # 54 tests across all modules
 ### Full local stack (Docker Compose)
 Postgres + Kafka (KRaft) + 6 services + the normalizer. See [RUNNING.md](RUNNING.md).
 ```bash
-docker compose up --build
+docker compose -f backend/docker-compose.yml up --build
 ./scripts/smoke-test.sh      # end-to-end: register → habit → log → webhook (HMAC-signed) → analytics
 ```
 Demo tenant seeded: `ACME2026` / `ria@acme.com` / `Password123!`.
