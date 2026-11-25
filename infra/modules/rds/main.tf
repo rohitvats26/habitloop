@@ -54,7 +54,6 @@ resource "aws_db_subnet_group" "this" {
 resource "aws_db_instance" "this" {
   identifier        = "${var.name}-postgres"
   engine            = "postgres"
-  engine_version    = "16.4"
   instance_class    = var.instance_class
   allocated_storage = var.allocated_storage
   storage_encrypted = true
@@ -70,7 +69,7 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
 
-  backup_retention_period = 7
+  backup_retention_period = 1
   deletion_protection     = false
   skip_final_snapshot     = true
 

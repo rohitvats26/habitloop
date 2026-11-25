@@ -50,6 +50,7 @@ terraform apply
 #    (ecr_url values: terraform output ecr_repository_urls). Then force a new ECS deployment to pull images.
 
 # 3. Build + upload the static frontend to S3
+#    The bucket name includes the AWS account ID to ensure global S3 name uniqueness.
 cd ../../../frontend
 #   set every VITE_*_SERVICE_URL in .env to the ALB URL: terraform output -raw alb_dns_name
 npm install && npm run build

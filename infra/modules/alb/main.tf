@@ -22,6 +22,12 @@ variable "tags" {
 
 locals {
   https_enabled = var.certificate_arn != ""
+  target_group_names = {
+    for service_name in keys(var.services) : service_name =>
+    length("${var.name}-${service_name}") > 32
+    ? "${var.name}-${trimsuffix(service_name, "-service")}"
+    : "${var.name}-${service_name}"
+  }
 }
 
 resource "aws_security_group" "alb" {
@@ -65,7 +71,7 @@ resource "aws_lb" "this" {
 
 resource "aws_lb_target_group" "svc" {
   for_each    = var.services
-  name        = "${var.name}-${each.key}"
+  name        = local.target_group_names[each.key]
   port        = each.value.port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id

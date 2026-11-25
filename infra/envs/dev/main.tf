@@ -102,7 +102,7 @@ module "alb" {
 # Frontend: static SvelteKit build hosted on S3 (PDF Session 3).
 module "s3_frontend" {
   source = "../../modules/s3"
-  name   = var.name
+  name   = "${var.name}-${data.aws_caller_identity.current.account_id}"
 }
 
 # ECS tasks security group — created here (not in the ecs module) so RDS can reference it without a cycle.
