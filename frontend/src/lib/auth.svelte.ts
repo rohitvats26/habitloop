@@ -7,7 +7,11 @@ const TOKEN_KEY = 'hl_token';
 function readToken(): string | null {
   if (!browser) return null;
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (token && decodeJwt(token)) return token;
+    sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    return null;
   } catch {
     return null;
   }
@@ -16,9 +20,9 @@ function readToken(): string | null {
 const initial = readToken();
 
 /**
- * Client-side auth state (runes). The JWT is kept in localStorage and sent as a Bearer header by the API
- * client. NOTE: a static S3 site cannot use httpOnly cookies, so the token lives in the browser — this is
- * the documented trade-off of the S3 static-hosting choice (PDF Session 3). See frontend/README.md.
+ * Client-side auth state (runes). The JWT is kept in sessionStorage and sent as a Bearer header by the API
+ * client. Static S3 hosting has no same-origin server for httpOnly cookies, so this remains exposed to
+ * same-origin script; sessionStorage limits persistence to the current tab.
  */
 export const auth = $state<{ token: string | null; user: AuthUser | null }>({
   token: initial,
@@ -29,7 +33,7 @@ export function setToken(token: string) {
   auth.token = token;
   auth.user = decodeJwt(token);
   try {
-    localStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(TOKEN_KEY, token);
   } catch {
     /* storage unavailable (private mode) — session-only */
   }
@@ -39,6 +43,7 @@ export function logout() {
   auth.token = null;
   auth.user = null;
   try {
+    sessionStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(TOKEN_KEY);
   } catch {
     /* ignore */
@@ -50,5 +55,5 @@ export function getToken(): string | null {
 }
 
 export function isAuthenticated(): boolean {
-  return !!auth.token && !!auth.user;
+  return !!auth.token && !!decodeJwt(auth.token);
 }

@@ -15,7 +15,7 @@ Extracted and grouped from the assignment brief.
 - FR-A3 Every user belongs to exactly one **tenant** (organization/community).
 - FR-A4 Roles exist and gate actions (**RBAC**): at minimum `USER`, `TENANT_ADMIN`, and a platform `SYSTEM` role.
 - FR-A5 A user can only ever read/write data inside their own tenant (**tenant isolation**).
-- FR-A6 Tenant-aware user profiles (display name, timezone, avatar).
+- FR-A6 Tenant-aware user profiles (display name, fixed India Standard Time timezone, avatar).
 
 ### FR-B — Habits & activity
 - FR-B1 Create / update / delete habits.
@@ -93,11 +93,11 @@ logs/metrics/events throughout.
 | AS-8  | Partner events are authenticated with a **per-connection API key + HMAC signature** over the body. | Brief says "validate partner authentication" without specifying a scheme; HMAC is the wearable-industry norm. |
 | AS-9  | Analytics aggregates are **recomputed on each relevant activity event** and also recomputable via a scheduled job; DynamoDB stores the latest aggregates. | Brief wants "aggregated analytics in DynamoDB" but not the trigger cadence. |
 | AS-10 | Recommendation Service is **read-mostly**: it reads analytics aggregates + recent activity and derives recommendations on demand (cached). No ML model training in scope — rule/heuristic based. | Brief says "analyze patterns / recommend"; a heuristic engine is sufficient and demonstrable, ML pipeline is out of scope. |
-| AS-11 | **API Gateway** service (Spring Cloud Gateway) fronts all services locally; in AWS the **ALB** performs path routing to ECS services. | Gives one local entry point and mirrors the AWS ALB routing. |
+| AS-11 | No standalone API Gateway service: services are reached on their own ports locally; in AWS the **ALB** performs path routing to ECS services. | Matches the implemented Docker Compose topology while retaining a single routed entry point in AWS. |
 | AS-12 | S3 hosts the **static SvelteKit build** (adapter-static); "secure global distribution and low-latency" ⇒ **CloudFront** in front of S3. | Brief asks for global distribution; CloudFront is the standard way. |
 | AS-13 | Local dev substitutes AWS services: **Postgres container** for RDS, **DynamoDB Local** for DynamoDB, **Kafka container** for Kafka; EventBridge/Lambda flow is emulated by a Kafka topic + a local consumer that runs the same normalization logic as the Lambda. | Keeps the end-to-end workflow runnable locally without real AWS. |
 | AS-14 | JWT is **stateless HS256** for local/dev with the secret in Secrets Manager; production can move to RS256 with a rotating key. | Keeps local setup simple; documented upgrade path. |
-| AS-15 | Timezone handling: each user profile carries an IANA timezone; "daily" boundaries and streaks are computed in the **user's** timezone. | Needed for correct streak/day math; brief implies per-user habits. |
+| AS-15 | Timezone handling: all profiles use the IANA timezone `Asia/Kolkata`; "daily" boundaries and streaks are computed in India Standard Time (IST). | The product uses one consistent timezone and does not ask users to configure it. |
 
 ---
 

@@ -3,10 +3,9 @@
 All ten required diagrams, each followed by a plain-language explanation. These render on GitHub and in
 any Mermaid-aware viewer.
 
-> **Revision note.** A few diagrams below show the frontend as an SSR app with `hooks.server.ts` + httpOnly
-> cookies and an API gateway. The implementation was revised to match the Session 3 brief: the frontend is a
-> **static SPA on Amazon S3** (client-side JWT, CORS to the backend), and routing is done by the **ALB**
-> (no standalone gateway). The network topology is in
+> **Revision note.** The frontend is a **static SPA on Amazon S3** (client-side JWT, CORS to the backend).
+> There is no standalone API Gateway: local clients call service ports directly, and the AWS ALB routes
+> requests to the backend services. The network topology is in
 > [diagrams/network-architecture.drawio](diagrams/network-architecture.drawio); see
 > [06-aws-infrastructure.md](06-aws-infrastructure.md) and `frontend/README.md`.
 
@@ -22,7 +21,7 @@ flowchart TB
 
     subgraph Edge["Edge / Entry"]
         CF["CloudFront + S3<br/>(static frontend)"]
-        ALB["Application Load Balancer<br/>(api-gateway)"]
+        ALB["Application Load Balancer<br/>(AWS path routing)"]
     end
 
     subgraph Backend["Backend microservices (ECS)"]
@@ -69,7 +68,8 @@ flowchart TB
 ```
 
 **Explanation.** The browser loads the static SvelteKit app from CloudFront/S3 and talks to the backend
-through the ALB, which routes to the API gateway and on to the six services. Transactional data lives in
+through the ALB in AWS; the ALB routes requests directly to the six services. Locally, clients call each
+service on its own port. Transactional data lives in
 RDS (one logical database per service); aggregated analytics live in DynamoDB. The event backbone is the
 spine: Activity Service publishes `activity.logged`, which both Challenge and Analytics react to; a
 wearable's webhook enters Integration Service, is stored raw in RDS, then flows EventBridge → Lambda →
@@ -81,7 +81,7 @@ normalized event → Activity Service, which creates the real activity log.
 
 ```mermaid
 flowchart LR
-    GW["api-gateway<br/>(Spring Cloud Gateway)<br/>JWT verify + route"]
+    Client["Frontend / API caller"]
 
     subgraph US["user-service"]
         USc["controller"] --> USs["service"] --> USr["repository"] --> USdb[("habitloop_user")]
@@ -102,14 +102,15 @@ flowchart LR
         RSc["controller"] --> RSs["service (heuristics)"]
     end
 
-    GW --> USc & ASc & CSc & ISc & ANSc & RSc
+    Client --> USc & ASc & CSc & ISc & ANSc & RSc
     RSs -->|read aggregates| ANSc
     CSs -. consumes activity.logged .-> AS
 ```
 
 **Explanation.** Every service repeats the same clean layering — controller (HTTP/DTO), service (domain
-logic + tenant checks), repository (persistence) — and owns its own database. The gateway is the single
-front door. Recommendation Service is special: no database of its own, it reads analytics aggregates and
+logic + tenant checks), repository (persistence) — and owns its own database. Clients reach service
+controllers directly locally; the AWS ALB routes to them in deployment. Recommendation Service is special:
+no database of its own, it reads analytics aggregates and
 derives recommendations. The dashed line shows Challenge Service learning about progress by consuming
 events rather than calling Activity Service synchronously.
 
@@ -123,30 +124,26 @@ flowchart TB
         R["Routes (pages)"]
         Runes["Svelte 5 Runes stores<br/>(auth, habits, challenges)"]
         Stencil["Stencil web components<br/>(chart, progress, tiles)"]
-        Actions["Form actions<br/>(create activity, accept invite, connect)"]
-        Hooks["hooks.server.ts<br/>(JWT cookie, guards)"]
         APIc["Typed API client"]
     end
 
-    GW["api-gateway"]
+    Services["Backend service APIs"]
+    ALB["AWS ALB<br/>(path routing)"]
 
     R --> Runes
     R --> Stencil
-    R --> Actions
-    Actions --> Hooks
-    R -->|load()| Hooks
-    Hooks --> APIc
-    APIc -->|"HTTPS + Bearer JWT"| GW
-    GW -->|JSON| APIc
+    APIc -->|"HTTPS + Bearer JWT (AWS)"| ALB
+    ALB --> Services
+    APIc -.->|"Bearer JWT (local direct)"| Services
+    Services -->|JSON| APIc
     APIc --> Runes
     Runes --> R
 ```
 
-**Explanation.** Pages read reactive state from Runes stores and render Stencil components for charts/progress.
-Writes go through SvelteKit **form actions**, which run on the server side (`hooks.server.ts`) where the
-JWT lives in an httpOnly cookie. The server-side typed API client calls the gateway with a Bearer token;
-responses update the Runes stores, which re-render the pages. This keeps the token off the client JS and
-gives progressive-enhancement forms.
+**Explanation.** The static SvelteKit app reads reactive state from Runes stores and renders Stencil
+components for charts and progress. Its browser API client calls the backend services with a Bearer JWT:
+directly on local service ports, or through ALB path routing in AWS. Each target service validates the JWT.
+Responses update the Runes stores, which re-render the pages.
 
 ---
 
@@ -197,7 +194,7 @@ flowchart TB
             NAT["NAT Gateway"]
         end
         subgraph APP["Private app subnets (2 AZs)"]
-            ECS["ECS Fargate services<br/>(6 microservices + gateway)"]
+            ECS["ECS Fargate services<br/>(6 microservices)"]
         end
         subgraph DATA["Private data subnets (2 AZs)"]
             RDS[("RDS PostgreSQL<br/>Multi-AZ")]
@@ -276,31 +273,28 @@ before writing the activity log — so even a replayed event never creates a dup
 sequenceDiagram
     actor U as User
     participant FE as SvelteKit
-    participant GW as api-gateway
     participant US as user-service
     participant DB as RDS (user)
     participant K as Kafka
 
     U->>FE: fill registration form
-    FE->>GW: POST /api/auth/register
-    GW->>US: forward
+    FE->>US: POST /api/auth/register
     US->>US: validate, hash password (BCrypt)
     US->>DB: create tenant (if new) + user + role
     US->>K: publish user.registered
     US-->>FE: 201 Created
     U->>FE: login (email, password)
-    FE->>GW: POST /api/auth/login
-    GW->>US: forward
+    FE->>US: POST /api/auth/login
     US->>DB: load user, verify BCrypt hash
     US-->>FE: 200 + JWT (tenantId, userId, roles)
-    FE->>FE: store JWT in httpOnly cookie
-    Note over FE,GW: subsequent calls send Bearer JWT;<br/>gateway verifies before routing
+    FE->>FE: store JWT for browser API calls
+    Note over FE,US: subsequent calls send Bearer JWT;<br/>each service validates it
 ```
 
 **Explanation.** Registration validates input, hashes the password with BCrypt, creates the tenant (if the
 user is the first) plus the user and role, and announces `user.registered`. Login verifies the hash and
-returns a JWT carrying `tenantId`, `userId`, and roles. The frontend keeps the token in an httpOnly cookie;
-every later request carries it as a Bearer token that the gateway verifies before routing.
+returns a JWT carrying `tenantId`, `userId`, and roles. The frontend sends it as a Bearer token on
+subsequent requests, and each target service validates it.
 
 ---
 
@@ -310,7 +304,6 @@ every later request carries it as a Bearer token that the gateway verifies befor
 sequenceDiagram
     actor U as User
     participant FE as SvelteKit
-    participant GW as api-gateway
     participant AS as activity-service
     participant DB as RDS (activity)
     participant K as Kafka
@@ -318,15 +311,13 @@ sequenceDiagram
     participant ANS as analytics-service
 
     U->>FE: create habit (name, schedule, frequency)
-    FE->>GW: POST /api/habits (JWT)
-    GW->>AS: forward
+    FE->>AS: POST /api/habits (JWT)
     AS->>AS: validate + set tenant from JWT
     AS->>DB: insert habit + schedule
     AS-->>FE: 201 habit
 
-    U->>FE: mark habit done today (form action)
-    FE->>GW: POST /api/habits/{id}/completions
-    GW->>AS: forward
+    U->>FE: mark habit done today
+    FE->>AS: POST /api/habits/{id}/completions (JWT)
     AS->>DB: insert completion, recompute streak
     AS->>K: publish activity.logged
     AS-->>FE: 200 + updated streak
@@ -336,8 +327,8 @@ sequenceDiagram
 ```
 
 **Explanation.** Creating a habit validates the payload, stamps the tenant from the JWT, and persists the
-habit plus its schedule. Recording a completion inserts the row, recomputes the streak in the user's
-timezone, and publishes `activity.logged`. Challenge Service and Analytics Service both consume that event
+habit plus its schedule. Recording a completion inserts the row, recomputes the streak in India Standard
+Time (`Asia/Kolkata`), and publishes `activity.logged`. Challenge Service and Analytics Service both consume that event
 to update progress and aggregates asynchronously, so the write path stays fast. The frontend invalidates
 the dashboard store so it re-renders with the new streak.
 
@@ -350,26 +341,22 @@ sequenceDiagram
     actor A as User A (creator)
     actor B as User B (invitee)
     participant FE as SvelteKit
-    participant GW as api-gateway
     participant CS as challenge-service
     participant US as user-service
     participant DB as RDS (challenge)
     participant K as Kafka
 
-    A->>GW: POST /api/challenges (public/private)
-    GW->>CS: forward
+    A->>CS: POST /api/challenges (public/private, JWT)
     CS->>DB: create challenge (tenant-scoped)
     CS-->>A: 201 challenge
 
-    A->>GW: POST /api/challenges/{id}/invites {userId:B}
-    GW->>CS: forward
+    A->>CS: POST /api/challenges/{id}/invites {userId:B}
     CS->>US: GET /internal/users/B (verify, same tenant)
     US-->>CS: user ok
     CS->>DB: create invitation(PENDING)
     CS-->>A: 200
 
-    B->>GW: POST /api/invitations/{id}/accept
-    GW->>CS: forward
+    B->>CS: POST /api/invitations/{id}/accept
     CS->>DB: invitation ACCEPTED + add participant
     CS-->>B: 200 joined
     K-->>CS: activity.logged events update B's progress

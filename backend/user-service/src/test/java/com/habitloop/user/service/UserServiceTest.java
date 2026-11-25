@@ -75,15 +75,16 @@ class UserServiceTest {
     }
 
     @Test
-    void updateProfile_updatesTimezone() {
+    void updateProfile_keepsIndiaTimezoneFixed() {
         UserProfile profile = buildProfile();
+        profile.setTimezone("America/New_York");
         when(profiles.findByUserIdAndTenantId(userId, tenantId)).thenReturn(Optional.of(profile));
         when(users.findByIdAndTenantId(userId, tenantId)).thenReturn(Optional.of(buildUser()));
         when(profiles.save(profile)).thenReturn(profile);
 
-        userService.updateCurrentProfile(new UpdateProfileRequest(null, "America/New_York", null));
+        userService.updateCurrentProfile(new UpdateProfileRequest("Ria", "Asia/Kolkata", null));
 
-        assertThat(profile.getTimezone()).isEqualTo("America/New_York");
+        assertThat(profile.getTimezone()).isEqualTo("Asia/Kolkata");
     }
 
     private User buildUser() {

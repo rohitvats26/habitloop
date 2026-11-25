@@ -3,6 +3,7 @@ package com.habitloop.user;
 import com.habitloop.user.dto.AuthResponse;
 import com.habitloop.user.dto.LoginRequest;
 import com.habitloop.user.dto.RegisterRequest;
+import com.habitloop.user.dto.TenantResponse;
 import com.habitloop.user.dto.UserResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,11 +52,12 @@ class AuthFlowIT {
     @Test
     void registerThenLogin_thenFetchMe() {
         RegisterRequest register = new RegisterRequest("it@acme.com", "Password123!", "IT User",
-                "UTC", "Acme IT", null);
+                "Asia/Kolkata", "Acme IT", null);
         ResponseEntity<UserResponse> reg = rest.postForEntity("/api/auth/register", register, UserResponse.class);
         assertThat(reg.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(reg.getBody()).isNotNull();
         assertThat(reg.getBody().roles()).contains("TENANT_ADMIN");
+        assertThat(reg.getBody().timezone()).isEqualTo("Asia/Kolkata");
 
         ResponseEntity<AuthResponse> login = rest.postForEntity("/api/auth/login",
                 new LoginRequest("it@acme.com", "Password123!", null), AuthResponse.class);
@@ -69,6 +71,24 @@ class AuthFlowIT {
                 org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), UserResponse.class);
         assertThat(me.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(me.getBody().email()).isEqualTo("it@acme.com");
+
+        ResponseEntity<TenantResponse> adminTenant = rest.exchange("/api/tenants/me",
+                org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), TenantResponse.class);
+        assertThat(adminTenant.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(adminTenant.getBody().joinCode()).isNotBlank();
+
+        rest.postForEntity("/api/auth/register",
+                new RegisterRequest("member@acme.com", "Password123!", "Member", "Asia/Kolkata",
+                        null, adminTenant.getBody().joinCode()),
+                UserResponse.class);
+        AuthResponse memberLogin = rest.postForEntity("/api/auth/login",
+                new LoginRequest("member@acme.com", "Password123!", null), AuthResponse.class).getBody();
+        HttpHeaders memberHeaders = new HttpHeaders();
+        memberHeaders.setBearerAuth(memberLogin.accessToken());
+        ResponseEntity<TenantResponse> memberTenant = rest.exchange("/api/tenants/me",
+                org.springframework.http.HttpMethod.GET, new HttpEntity<>(memberHeaders), TenantResponse.class);
+        assertThat(memberTenant.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(memberTenant.getBody().joinCode()).isEqualTo(adminTenant.getBody().joinCode());
 
         // Unauthenticated access is rejected.
         ResponseEntity<String> noAuth = rest.getForEntity("/api/users/me", String.class);

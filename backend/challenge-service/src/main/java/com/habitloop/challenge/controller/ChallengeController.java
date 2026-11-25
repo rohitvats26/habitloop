@@ -65,6 +65,6 @@ public class ChallengeController {
     @Operation(summary = "Invite a user (same tenant) to a challenge")
     public ResponseEntity<InvitationResponse> invite(@PathVariable UUID id,
                                                      @Valid @RequestBody InviteRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(invitationService.invite(id, request.userId()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(invitationService.invite(id, request.userUuid()));
     }
 }

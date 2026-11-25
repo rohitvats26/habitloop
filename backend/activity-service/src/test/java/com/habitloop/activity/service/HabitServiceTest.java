@@ -17,8 +17,10 @@ import com.habitloop.activity.repository.HabitCompletionRepository;
 import com.habitloop.activity.repository.HabitRepository;
 import com.habitloop.activity.repository.HabitStreakRepository;
 import com.habitloop.common.exception.DuplicateResourceException;
+import com.habitloop.common.exception.InvalidRequestException;
 import com.habitloop.common.exception.ResourceNotFoundException;
 import com.habitloop.common.security.AuthUser;
+import com.habitloop.common.time.TimeZones;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,6 +94,16 @@ class HabitServiceTest {
     }
 
     @Test
+    void create_invalidTargetIsRejectedInsteadOfSilentlyDefaulted() {
+        CreateHabitRequest invalid = new CreateHabitRequest("Morning run", null, Frequency.DAILY, null, 0);
+
+        assertThatThrownBy(() -> service.create(invalid))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("targetPerPeriod must be greater than zero");
+        verify(habits, never()).save(any());
+    }
+
+    @Test
     void complete_recordsCompletion_updatesStreak_andPublishesEvent() {
         Habit habit = habit();
         when(habits.findByIdAndUserIdAndTenantIdAndDeletedAtIsNull(habitId, userId, tenantId))
@@ -115,6 +127,10 @@ class HabitServiceTest {
 
         assertThat(res.streak().current()).isEqualTo(1);
         assertThat(res.streak().longest()).isEqualTo(1);
+        ArgumentCaptor<ActivityLog> logCaptor = ArgumentCaptor.forClass(ActivityLog.class);
+        verify(activityLogs).save(logCaptor.capture());
+        assertThat(logCaptor.getValue().getOccurredAt())
+                .isEqualTo(LocalDate.of(2026, 11, 23).atStartOfDay(TimeZones.INDIA).toOffsetDateTime());
 
         ArgumentCaptor<ActivityLoggedEvent> captor = ArgumentCaptor.forClass(ActivityLoggedEvent.class);
         verify(events).publishEvent(captor.capture());
@@ -130,6 +146,19 @@ class HabitServiceTest {
 
         assertThatThrownBy(() -> service.complete(habitId, new CompletionRequest(LocalDate.of(2026, 11, 23), null)))
                 .isInstanceOf(DuplicateResourceException.class);
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void complete_futureDateIsRejected() {
+        when(habits.findByIdAndUserIdAndTenantIdAndDeletedAtIsNull(habitId, userId, tenantId))
+                .thenReturn(Optional.of(habit()));
+        LocalDate futureDate = LocalDate.now(TimeZones.INDIA).plusDays(1);
+
+        assertThatThrownBy(() -> service.complete(habitId, new CompletionRequest(futureDate, null)))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("Completion date cannot be in the future");
+        verify(completions, never()).save(any());
         verify(events, never()).publishEvent(any());
     }
 

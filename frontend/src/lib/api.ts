@@ -1,10 +1,19 @@
 /**
- * Client-side API client. Runs in the browser (static S3 site), calling the backend cross-origin via the
- * ALB. The JWT is attached as a Bearer header from the auth store. Base URLs come from build-time env
- * (VITE_*). In production set every VITE_*_SERVICE_URL to the ALB URL (path routing sends each /api/* to the
- * right service); in local dev they default to the per-service ports.
+ * Client-side API client. In production the static site and /api/* requests share the CloudFront origin;
+ * CloudFront forwards API paths to the ALB, which routes to each service. The JWT is attached as a Bearer
+ * header from the auth store. Base URLs come from build-time env (VITE_*); local dev defaults to service ports.
  */
-import { getToken } from './auth.svelte';
+import { browser } from '$app/environment';
+import { getToken, logout } from './auth.svelte';
+import type {
+  ActivityQuery,
+  CohortSummary,
+  PatternSummary,
+  RecommendationResponse,
+  TenantInfo,
+  UserProfile,
+  WeeklyStat
+} from './types';
 
 const BASES = {
   user: import.meta.env.VITE_USER_SERVICE_URL ?? 'http://localhost:8081',
@@ -33,9 +42,15 @@ interface Opts {
   body?: unknown;
 }
 
+interface ErrorPayload {
+  code?: string;
+  message?: string;
+  details?: string[];
+}
+
 async function call<T>(svc: Svc, path: string, opts: Opts = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = getToken();
+  const token = path.startsWith('/api/auth/') ? null : getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -47,17 +62,54 @@ async function call<T>(svc: Svc, path: string, opts: Opts = {}): Promise<T> {
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined
     });
   } catch {
-    throw new ApiError(503, 'SERVICE_UNAVAILABLE', `${svc}-service unreachable`);
+    throw new ApiError(
+      503,
+      'SERVICE_UNAVAILABLE',
+      "The service is temporarily unavailable. Check your connection and try again."
+    );
   }
 
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  if (!res.ok && res.status === 401 && token) {
+    logout();
+    if (browser && window.location.pathname !== '/login') {
+      window.location.assign('/login');
+    }
+  }
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text) as unknown;
+    } catch {
+      throw new ApiError(
+        res.ok ? 502 : res.status,
+        'INVALID_RESPONSE',
+        'The service returned an unreadable response. Please try again.'
+      );
+    }
+  }
   if (!res.ok) {
-    const code = data?.code ?? 'ERROR';
-    const message = data?.message ?? res.statusText;
-    throw new ApiError(res.status, code, message, data?.details ?? []);
+    const payload = errorPayload(data);
+    throw new ApiError(
+      res.status,
+      payload.code ?? 'ERROR',
+      payload.message ?? (res.statusText || `Request failed with status ${res.status}.`),
+      payload.details ?? []
+    );
   }
   return data as T;
+}
+
+function errorPayload(value: unknown): ErrorPayload {
+  if (typeof value !== 'object' || value === null) return {};
+  const record = value as Record<string, unknown>;
+  return {
+    ...(typeof record.code === 'string' ? { code: record.code } : {}),
+    ...(typeof record.message === 'string' ? { message: record.message } : {}),
+    ...(Array.isArray(record.details)
+      ? { details: record.details.filter((detail): detail is string => typeof detail === 'string') }
+      : {})
+  };
 }
 
 export const api = {
@@ -70,8 +122,11 @@ export const api = {
       })
   },
   users: {
-    me: () => call('user', '/api/users/me'),
+    me: () => call<UserProfile>('user', '/api/users/me'),
     updateMe: (body: unknown) => call('user', '/api/users/me', { method: 'PUT', body })
+  },
+  tenants: {
+    me: () => call<TenantInfo>('user', '/api/tenants/me')
   },
   habits: {
     list: () => call('activity', '/api/habits?size=100'),
@@ -80,10 +135,20 @@ export const api = {
     update: (id: string, body: unknown) => call('activity', `/api/habits/${id}`, { method: 'PUT', body }),
     remove: (id: string) => call('activity', `/api/habits/${id}`, { method: 'DELETE' }),
     complete: (id: string, body: unknown) =>
-      call('activity', `/api/habits/${id}/completions`, { method: 'POST', body })
+      call('activity', `/api/habits/${id}/completions`, { method: 'POST', body }),
+    completions: (id: string, page = 0, size = 20) =>
+      call('activity', `/api/habits/${id}/completions?page=${page}&size=${size}`)
   },
   activity: {
-    log: () => call('activity', '/api/activity?size=50')
+    log: (query: ActivityQuery = {}) => {
+      const params = new URLSearchParams();
+      params.set('page', String(query.page ?? 0));
+      params.set('size', String(query.size ?? 50));
+      if (query.type) params.set('type', query.type);
+      if (query.from) params.set('from', query.from);
+      if (query.to) params.set('to', query.to);
+      return call('activity', `/api/activity?${params.toString()}`);
+    }
   },
   challenges: {
     feed: () => call('challenge', '/api/challenges?size=100'),
@@ -105,9 +170,22 @@ export const api = {
   },
   analytics: {
     summary: () => call('analytics', '/api/analytics/summary'),
-    daily: () => call('analytics', '/api/analytics/daily')
+    daily: (from?: string, to?: string) => {
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      const query = params.toString();
+      return call('analytics', `/api/analytics/daily${query ? `?${query}` : ''}`);
+    },
+    weekly: (weeks = 8) =>
+      call<WeeklyStat[]>('analytics', `/api/analytics/weekly?weeks=${weeks}`),
+    pattern: () => call<PatternSummary>('analytics', '/api/analytics/pattern'),
+    cohort: (date: string) =>
+      call<CohortSummary>('analytics', `/api/analytics/cohort?date=${encodeURIComponent(date)}`)
   },
   recommendations: {
-    list: () => call<{ items: unknown[] }>('recommendation', '/api/recommendations')
+    list: () => call<RecommendationResponse>('recommendation', '/api/recommendations'),
+    forHabit: (id: string) =>
+      call<RecommendationResponse>('recommendation', `/api/recommendations/habits/${id}`)
   }
 };

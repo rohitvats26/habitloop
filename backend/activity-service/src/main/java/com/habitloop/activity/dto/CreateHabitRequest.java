@@ -15,4 +15,8 @@ public record CreateHabitRequest(
         Map<String, Object> schedule,
         @Positive int targetPerPeriod
 ) {
+    @jakarta.validation.constraints.AssertTrue(message = "schedule is invalid for the selected frequency")
+    public boolean isScheduleValid() {
+        return HabitScheduleRules.isCompatible(schedule, frequency);
+    }
 }

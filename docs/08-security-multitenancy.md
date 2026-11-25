@@ -13,9 +13,10 @@ NFR-4.
 - **Signing:** HS256 for local/dev (shared secret in Secrets Manager); RS256 for production (private key in
   Secrets Manager, public key distributed to services for verification). Upgrade path documented (AS-14).
 - **Claims:** `sub` (userId), `tenantId`, `roles[]`, `iss`, `iat`, `exp`, `jti`.
-- **Verification:** the API gateway verifies the token once; each service **also** verifies (defense in
-  depth) via a shared `JwtAuthenticationFilter` in `backend/common`. No service trusts an unauthenticated
-  caller even internally (internal calls carry a service token or the propagated user JWT).
+- **Verification:** each service verifies the token via a shared `JwtAuthenticationFilter` in
+  `backend/common`. The ALB routes requests in AWS but does not replace service-level verification. No
+  service trusts an unauthenticated caller even internally (internal calls carry a service token or the
+  propagated user JWT).
 
 ---
 
@@ -89,18 +90,25 @@ integration-test gate (NFR-7).
   - **HMAC-SHA256** signature over the raw body with the connection's secret (from Secrets Manager),
     compared in constant time; mismatch → `401`.
   - **replay/idempotency** via `external_event_id` uniqueness.
-  - **rate limiting** per connection at the gateway (`429`).
-- **CORS** restricted to the known frontend origin(s); **security headers** (HSTS, X-Content-Type-Options,
-  frame options) set at the edge/gateway.
+  - **rate limiting** per connection is an edge/WAF concern (`429`), not a standalone gateway feature.
+- **CORS** is only needed for local development's direct browser-to-service calls; production browser
+  requests use the same-origin CloudFront `/api/*` route. The service default allows `*`, so deployments
+  that expose service origins directly should configure `HABITLOOP_CORS_ALLOWED_ORIGINS` with explicit
+  trusted origins. Edge security headers (HSTS, X-Content-Type-Options, frame options) can be configured
+  at CloudFront/ALB.
 
 ---
 
 ## 5. Secret management (no hardcoded secrets — NFR-4)
 
 - **Local:** secrets come from a git-ignored `.env` consumed by Docker Compose; an `.env.example` documents
-  the keys without values.
-- **AWS:** all secrets (DB creds, JWT key, per-connection HMAC secrets) live in **Secrets Manager**,
-  injected into ECS tasks and Lambda via IAM-scoped references. Rotation enabled for DB credentials.
+  the keys without values. The integration service defaults to its in-memory secret store for local
+  development (`SECRET_STORE_BACKEND=memory`); those per-connection HMAC secrets are lost on restart.
+- **AWS:** per-connection HMAC secrets are created and resolved by the integration service through its
+  `SecretStore` adapter backed by **Secrets Manager** (`SECRET_STORE_BACKEND=aws`). The ECS task role uses
+  its default credentials and is scoped to the environment's secret-name prefix. RDS stores only the
+  logical reference; the adapter maps it under that prefix. DB credentials and JWT key are injected into
+  ECS/Lambda by Secrets Manager. Rotation is enabled for DB credentials.
 - Code references secret **names/ARNs**, never literal values. CI scans (e.g. gitleaks) guard against
   accidental commits. Partner HMAC secrets are stored only as Secrets Manager references in RDS
   (`hmac_secret_ref`), never the secret itself.
@@ -131,7 +139,7 @@ integration-test gate (NFR-7).
 
 | Brief requirement | Mechanism |
 |-------------------|-----------|
-| JWT authentication | HS256/RS256 tokens, gateway + per-service verification |
+| JWT authentication | HS256/RS256 tokens, verified by each service |
 | Role-based authorization | Spring Security `@PreAuthorize` + ownership checks |
 | Tenant-level access control | JWT-sourced `TenantContext` + mandatory Hibernate filter + API/event checks |
 | Input validation | Bean Validation on all DTOs |

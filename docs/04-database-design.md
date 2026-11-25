@@ -2,7 +2,7 @@
 
 **Database-per-service** on Amazon RDS (PostgreSQL) for transactional data; **DynamoDB** single-table for
 aggregated analytics. Every tenant-owned RDS table carries a non-null `tenant_id` and is indexed on it.
-All ids are UUIDs. Timestamps are `timestamptz` (UTC); day/week math is done per user timezone.
+All ids are UUIDs. Timestamps are `timestamptz` (UTC); day/week math uses India Standard Time (`Asia/Kolkata`).
 
 Conventions: `created_at`/`updated_at` on every table; soft-delete via `deleted_at` where deletion must be
 reversible (habits, challenges); enums stored as `varchar` with a check constraint.
@@ -50,7 +50,7 @@ CREATE TABLE user_profiles (
     user_id      UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     tenant_id    UUID NOT NULL,
     display_name VARCHAR(80),
-    timezone     VARCHAR(64) NOT NULL DEFAULT 'UTC', -- IANA tz (AS-15)
+    timezone     VARCHAR(64) NOT NULL DEFAULT 'Asia/Kolkata', -- fixed product timezone (AS-15)
     avatar_url   VARCHAR(512),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -256,7 +256,8 @@ single-table pattern keeps all of a user's analytics in one partition.
 ## 6. Initialization & seeding
 
 - Each service ships `db/<service>/schema.sql` (DDL above) + `db/<service>/seed.sql` (demo tenant, users,
-  habits) — Spring Boot runs them via Flyway migrations (`V1__init.sql`, `V2__seed.sql`).
+  habits) — Spring Boot runs them via Flyway migrations.
+- The user-service migration `V3__set_india_timezone.sql` updates existing profiles to the fixed product timezone.
 - DynamoDB table + GSI are created by Terraform (AWS) and by an init script against DynamoDB Local (dev).
 - A demo dataset (one tenant, 3 users, sample habits, one challenge, one wearable connection) is seeded so
   the end-to-end workflow is runnable immediately after `docker-compose up`.

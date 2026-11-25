@@ -76,17 +76,19 @@ class AuthServiceTest {
 
         assertThat(res.email()).isEqualTo("ria@acme.com");
         assertThat(res.roles()).containsExactly(Role.TENANT_ADMIN);
+        assertThat(res.timezone()).isEqualTo("Asia/Kolkata");
     }
 
     @Test
     void register_requiresExactlyOneOfTenantNameOrJoinCode() {
-        RegisterRequest both = new RegisterRequest("a@b.com", "Password123!", "A", "UTC", "T", "CODE");
+        RegisterRequest both = new RegisterRequest("a@b.com", "Password123!", "A", "Asia/Kolkata", "T", "CODE");
         assertThatThrownBy(() -> authService.register(both)).isInstanceOf(BusinessException.class);
     }
 
     @Test
     void register_duplicateEmail_inTenant_throwsConflict() {
-        RegisterRequest req = new RegisterRequest("dup@acme.com", "Password123!", "Dup", "UTC", null, "ACME2026");
+        RegisterRequest req = new RegisterRequest("dup@acme.com", "Password123!", "Dup",
+                "Asia/Kolkata", null, "ACME2026");
         Tenant tenant = new Tenant();
         tenant.setId(UUID.randomUUID());
         tenant.setJoinCode("ACME2026");

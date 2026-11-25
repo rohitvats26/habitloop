@@ -35,6 +35,12 @@ variable "certificate_arn" {
   description = "ACM cert ARN for the ALB HTTPS:443 listener (needs a domain). Empty = HTTP only."
 }
 
+variable "api_origin_domain_name" {
+  type        = string
+  default     = ""
+  description = "Optional DNS name resolving to the ALB and covered by certificate_arn for HTTPS from CloudFront to the API origin."
+}
+
 variable "lambda_jar_path" {
   type    = string
   default = "../../../backend/lambda-normalizer/target/lambda-normalizer-0.0.1-SNAPSHOT.jar"

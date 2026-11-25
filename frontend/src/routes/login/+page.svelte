@@ -18,36 +18,57 @@
       setToken(res.accessToken);
       await goto('/dashboard');
     } catch (err) {
-      error = err instanceof ApiError ? err.message : 'Unexpected error';
+      error = err instanceof ApiError ? err.message : "We couldn't sign you in. Please try again.";
     } finally {
       loading = false;
     }
   }
 </script>
 
-<div class="auth">
-  <form onsubmit={submit} class="card">
-    <h1>Welcome back</h1>
-    <p class="muted">Log in to your HabitLoop account.</p>
-    {#if error}<div class="error-banner">{error}</div>{/if}
-    <div class="field">
-      <label class="label" for="email">Email</label>
-      <input class="input" id="email" type="email" bind:value={email} required />
-    </div>
-    <div class="field">
-      <label class="label" for="password">Password</label>
-      <input class="input" id="password" type="password" bind:value={password} required />
-    </div>
-    <div class="field">
-      <label class="label" for="tenantCode">Tenant code (optional)</label>
-      <input class="input" id="tenantCode" bind:value={tenantCode} placeholder="Only if your email is in multiple tenants" />
-    </div>
-    <button class="btn btn-primary" type="submit" disabled={loading}>{loading ? 'Logging in…' : 'Log in'}</button>
-    <p class="muted" style="margin-top:0.9rem">No account? <a href="/register">Create one</a></p>
-  </form>
-</div>
+<main class="auth-page">
+  <div class="auth-layout">
+    <section class="auth-story">
+      <div class="auth-brand"><span class="brand-mark">H</span>HabitLoop</div>
+      <div class="auth-story-copy">
+        <span class="eyebrow">A little progress, every day</span>
+        <h2>Make room for better habits.</h2>
+        <p>Build a routine that fits your life, celebrate your momentum, and keep moving forward.</p>
+        <div class="momentum-card" aria-hidden="true">
+          <div class="momentum-head"><strong>Your week, at a glance</strong><span>Mon — Sun</span></div>
+          <div class="momentum-bars">
+            <span style="height: 32%"></span><span style="height: 52%"></span><span style="height: 44%"></span>
+            <span style="height: 76%"></span><span style="height: 60%"></span><span style="height: 88%"></span>
+            <span style="height: 70%"></span>
+          </div>
+          <div class="momentum-days"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        </div>
+      </div>
+      <div class="auth-story-foot">Progress is personal. Keep showing up for yourself.</div>
+    </section>
 
-<style>
-  .auth { min-height: 100vh; display: grid; place-items: center; padding: 1rem; }
-  form { width: 380px; max-width: 100%; }
-</style>
+    <section class="auth-panel">
+      <form onsubmit={submit} class="card auth-card">
+        <span class="eyebrow">Your journey continues</span>
+        <h1>Welcome back</h1>
+        <p class="muted">Log in to pick up where you left off.</p>
+        {#if error}<div class="error-banner" role="alert">{error}</div>{/if}
+        <div class="field">
+          <label class="label" for="email">Email</label>
+          <input class="input" id="email" type="email" autocomplete="username" bind:value={email} maxlength="255" required />
+        </div>
+        <div class="field">
+          <label class="label" for="password">Password</label>
+          <input class="input" id="password" type="password" autocomplete="current-password" bind:value={password} maxlength="72" required />
+        </div>
+        <div class="field">
+          <label class="label" for="tenantCode">Tenant code <span class="muted">(optional)</span></label>
+          <input class="input" id="tenantCode" bind:value={tenantCode} maxlength="16" placeholder="Only needed for multiple workspaces" />
+        </div>
+        <button class="btn btn-primary" type="submit" disabled={loading} aria-busy={loading}>
+          {#if loading}<span class="loading-spinner loading-spinner-small" aria-hidden="true"></span> Signing in…{:else}Log in{/if}
+        </button>
+        <p class="muted auth-switch">New to HabitLoop? <a href="/register">Create an account</a></p>
+      </form>
+    </section>
+  </div>
+</main>

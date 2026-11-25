@@ -4,6 +4,7 @@ import com.habitloop.activity.dto.CompletionRequest;
 import com.habitloop.activity.dto.CompletionResponse;
 import com.habitloop.activity.dto.CreateHabitRequest;
 import com.habitloop.activity.dto.HabitResponse;
+import com.habitloop.activity.dto.HabitScheduleRules;
 import com.habitloop.activity.dto.StreakDto;
 import com.habitloop.activity.dto.UpdateHabitRequest;
 import com.habitloop.activity.entity.ActivityLog;
@@ -18,8 +19,10 @@ import com.habitloop.activity.repository.HabitCompletionRepository;
 import com.habitloop.activity.repository.HabitRepository;
 import com.habitloop.activity.repository.HabitStreakRepository;
 import com.habitloop.common.exception.DuplicateResourceException;
+import com.habitloop.common.exception.InvalidRequestException;
 import com.habitloop.common.exception.ResourceNotFoundException;
 import com.habitloop.common.security.SecurityUtils;
+import com.habitloop.common.time.TimeZones;
 import com.habitloop.common.web.PageResponse;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
@@ -54,6 +57,12 @@ public class HabitService {
 
     @Transactional
     public HabitResponse create(CreateHabitRequest req) {
+        if (req.targetPerPeriod() <= 0) {
+            throw new InvalidRequestException("targetPerPeriod must be greater than zero");
+        }
+        if (!HabitScheduleRules.isCompatible(req.schedule(), req.frequency())) {
+            throw new InvalidRequestException("Schedule is invalid for the selected frequency");
+        }
         Habit habit = new Habit();
         habit.setTenantId(tenantId());
         habit.setUserId(userId());
@@ -61,7 +70,7 @@ public class HabitService {
         habit.setDescription(req.description());
         habit.setFrequency(req.frequency());
         habit.setSchedule(mapper.writeSchedule(req.schedule()));
-        habit.setTargetPerPeriod(req.targetPerPeriod() <= 0 ? 1 : req.targetPerPeriod());
+        habit.setTargetPerPeriod(req.targetPerPeriod());
         habit = habits.save(habit);
         return mapper.toHabitResponse(habit, null);
     }
@@ -82,6 +91,14 @@ public class HabitService {
     @Transactional
     public HabitResponse update(UUID habitId, UpdateHabitRequest req) {
         Habit habit = requireHabit(habitId);
+        if (req.targetPerPeriod() != null && req.targetPerPeriod() <= 0) {
+            throw new InvalidRequestException("targetPerPeriod must be greater than zero");
+        }
+        var frequency = req.frequency() == null ? habit.getFrequency() : req.frequency();
+        var schedule = req.schedule() == null ? mapper.readSchedule(habit.getSchedule()) : req.schedule();
+        if (!HabitScheduleRules.isCompatible(schedule, frequency)) {
+            throw new InvalidRequestException("Schedule is invalid for the selected frequency");
+        }
         if (StringUtils.hasText(req.name())) {
             habit.setName(req.name().trim());
         }
@@ -94,7 +111,7 @@ public class HabitService {
         if (req.schedule() != null) {
             habit.setSchedule(mapper.writeSchedule(req.schedule()));
         }
-        if (req.targetPerPeriod() != null && req.targetPerPeriod() > 0) {
+        if (req.targetPerPeriod() != null) {
             habit.setTargetPerPeriod(req.targetPerPeriod());
         }
         if (req.active() != null) {
@@ -115,7 +132,11 @@ public class HabitService {
     @Transactional
     public CompletionResponse complete(UUID habitId, CompletionRequest req) {
         Habit habit = requireHabit(habitId);
-        LocalDate date = req.date() != null ? req.date() : LocalDate.now();
+        LocalDate today = LocalDate.now(TimeZones.INDIA);
+        LocalDate date = req.date() != null ? req.date() : today;
+        if (date.isAfter(today)) {
+            throw new InvalidRequestException("Completion date cannot be in the future");
+        }
 
         if (completions.existsByHabitIdAndCompletionDate(habitId, date)) {
             throw new DuplicateResourceException("Habit already completed on " + date);
@@ -173,7 +194,7 @@ public class HabitService {
         log.setUserId(habit.getUserId());
         log.setHabitId(habit.getId());
         log.setActivityType("HABIT_DONE");
-        log.setOccurredAt(date.atStartOfDay().atOffset(OffsetDateTime.now().getOffset()));
+        log.setOccurredAt(date.atStartOfDay(TimeZones.INDIA).toOffsetDateTime());
         log.setSource(ActivitySource.MANUAL);
         return activityLogs.save(log);
     }

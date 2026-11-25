@@ -26,28 +26,29 @@ class AnalyticsIngestServiceTest {
 
     @Test
     void apply_aggregatesDailyWeeklyAndPattern() {
-        OffsetDateTime at = OffsetDateTime.parse("2026-11-23T07:30:00Z");
+        OffsetDateTime at = OffsetDateTime.parse("2026-11-23T22:30:00Z");
         service.apply(tenantId, userId, "log1", at);
         service.apply(tenantId, userId, "log2", at);
 
         String pk = AnalyticsKeys.pk(tenantId, userId);
-        AnalyticsItem daily = store.get(pk, AnalyticsKeys.skDaily(LocalDate.of(2026, 11, 23))).orElseThrow();
+        AnalyticsItem daily = store.get(pk, AnalyticsKeys.skDaily(LocalDate.of(2026, 11, 24))).orElseThrow();
         assertThat(daily.getCompletions()).isEqualTo(2);
-        assertThat(daily.getByHour()).containsEntry("07", 2);
-        assertThat(daily.getGsi1pk()).isEqualTo(AnalyticsKeys.gsi1pk(tenantId, LocalDate.of(2026, 11, 23)));
+        assertThat(daily.getByHour()).containsEntry("04", 2);
+        assertThat(daily.getByWeekday()).containsEntry("TUE", 2);
+        assertThat(daily.getGsi1pk()).isEqualTo(AnalyticsKeys.gsi1pk(tenantId, LocalDate.of(2026, 11, 24)));
 
         AnalyticsItem pattern = store.get(pk, AnalyticsKeys.SK_PATTERN).orElseThrow();
-        assertThat(pattern.getByHour()).containsEntry("07", 2);
+        assertThat(pattern.getByHour()).containsEntry("04", 2);
     }
 
     @Test
     void apply_isIdempotentPerActivityLog() {
-        OffsetDateTime at = OffsetDateTime.parse("2026-11-23T07:30:00Z");
+        OffsetDateTime at = OffsetDateTime.parse("2026-11-23T22:30:00Z");
         service.apply(tenantId, userId, "log1", at);
         service.apply(tenantId, userId, "log1", at); // replay
 
         String pk = AnalyticsKeys.pk(tenantId, userId);
-        AnalyticsItem daily = store.get(pk, AnalyticsKeys.skDaily(LocalDate.of(2026, 11, 23))).orElseThrow();
+        AnalyticsItem daily = store.get(pk, AnalyticsKeys.skDaily(LocalDate.of(2026, 11, 24))).orElseThrow();
         assertThat(daily.getCompletions()).isEqualTo(1);
     }
 }

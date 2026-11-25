@@ -4,18 +4,25 @@
   import Toasts from '$lib/components/Toasts.svelte';
 
   let { children } = $props();
+  let componentError = $state('');
 
-  onMount(async () => {
-    // Register the Stencil custom elements on the client. If the library hasn't been built yet,
-    // the hl-* elements simply render nothing and the pages still work.
-    try {
-      const mod: any = await import('@habitloop/components/loader');
-      mod.defineCustomElements?.();
-    } catch {
-      /* Stencil component library not built — run `npm i && npm run build` in components-stencil */
-    }
+  onMount(() => {
+    void registerComponents();
   });
+
+  async function registerComponents() {
+    try {
+      const { defineCustomElements } = await import('@habitloop/components/loader');
+      await defineCustomElements();
+    } catch (error) {
+      console.error('Failed to register HabitLoop custom elements.', error);
+      componentError = "Some parts of the page couldn't load. Refresh the page to try again.";
+    }
+  }
 </script>
 
 <Toasts />
+{#if componentError}
+  <div class="error-banner" role="alert">{componentError}</div>
+{/if}
 {@render children()}

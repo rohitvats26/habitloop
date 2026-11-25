@@ -69,7 +69,7 @@ public class ActivityMapper {
         try {
             return objectMapper.readValue(json, MAP_TYPE);
         } catch (Exception e) {
-            return Map.of();
+            throw new IllegalStateException("Stored habit schedule could not be read", e);
         }
     }
 }

@@ -42,6 +42,10 @@ export namespace Components {
      */
     interface HlHabitCard {
         /**
+          * @default false
+         */
+        "completed": boolean;
+        /**
           * @default 0
          */
         "current": number;
@@ -49,6 +53,10 @@ export namespace Components {
           * @default ''
          */
         "habitId": string;
+        /**
+          * @default false
+         */
+        "loading": boolean;
         /**
           * @default 0
          */
@@ -266,6 +274,10 @@ declare namespace LocalJSX {
      */
     interface HlHabitCard {
         /**
+          * @default false
+         */
+        "completed"?: boolean;
+        /**
           * @default 0
          */
         "current"?: number;
@@ -273,6 +285,10 @@ declare namespace LocalJSX {
           * @default ''
          */
         "habitId"?: string;
+        /**
+          * @default false
+         */
+        "loading"?: boolean;
         /**
           * @default 0
          */
@@ -364,6 +380,8 @@ declare namespace LocalJSX {
         "habitId": string;
         "current": number;
         "longest": number;
+        "completed": boolean;
+        "loading": boolean;
     }
     interface HlPartnerTileAttributes {
         "partner": string;

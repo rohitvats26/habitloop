@@ -99,7 +99,7 @@ public class AuthService {
         profile.setUserId(user.getId());
         profile.setTenantId(tenant.getId());
         profile.setDisplayName(req.displayName().trim());
-        profile.setTimezone(StringUtils.hasText(req.timezone()) ? req.timezone().trim() : "UTC");
+        profile.setTimezone(StringUtils.hasText(req.timezone()) ? req.timezone().trim() : UserProfile.TIMEZONE);
         profiles.save(profile);
 
         log.info("Registered user {} in tenant {} as {}", user.getId(), tenant.getId(), roleName);

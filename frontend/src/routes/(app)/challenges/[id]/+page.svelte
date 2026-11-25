@@ -1,5 +1,6 @@
 <script lang="ts">
   import Topbar from '$lib/components/Topbar.svelte';
+  import LoadingState from '$lib/components/LoadingState.svelte';
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
   import { pushToast } from '$lib/stores/toast.svelte';
@@ -10,43 +11,72 @@
 
   let c = $state<ChallengeDetail | null>(null);
   let error = $state('');
+  let loading = $state(true);
+  let sendingInvite = $state(false);
   let inviteUserId = $state('');
 
   const id = $derived(params.id);
+  const userIdPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
   async function load() {
+    loading = true;
+    error = '';
     try {
       c = (await api.challenges.get(id)) as ChallengeDetail;
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Failed to load challenge';
+    } finally {
+      loading = false;
     }
   }
 
-  onMount(load);
+  onMount(() => {
+    void load();
+  });
 
   async function invite(e: SubmitEvent) {
     e.preventDefault();
+    if (sendingInvite) return;
+    const userId = inviteUserId.trim();
+    if (!userIdPattern.test(userId)) {
+      pushToast('Enter a valid user ID', 'error');
+      return;
+    }
+
+    sendingInvite = true;
     try {
-      await api.challenges.invite(id, { userId: inviteUserId });
+      await api.challenges.invite(id, { userId });
       inviteUserId = '';
       pushToast('Invitation sent', 'success');
     } catch (e) {
-      pushToast(e instanceof ApiError ? e.message : 'Failed to invite', 'error');
+      const fieldError = e instanceof ApiError
+        ? e.details.find((detail) => detail.startsWith('userId:'))?.replace(/^userId:\s*/, '')
+        : undefined;
+      pushToast(fieldError ?? (e instanceof ApiError ? e.message : 'Failed to invite'), 'error');
+    } finally {
+      sendingInvite = false;
     }
   }
 </script>
 
-<Topbar title={c?.title ?? 'Challenge'} />
-{#if error}<div class="error-banner">{error}</div>{/if}
+<Topbar title={c?.title ?? 'Challenge'} subtitle="Follow progress and invite teammates to join." />
+{#if error}<div class="error-banner" role="alert">{error} <button class="btn" onclick={load}>Retry</button></div>{/if}
 
-{#if c}
+{#if loading}
+  <LoadingState message="Loading challenge details…" />
+{:else if c}
   <div class="row two">
     <div class="card grow">
-      <div class="head"><span class="badge">{c.visibility}</span><span class="badge">{c.status}</span></div>
+      <hl-challenge-card
+        challenge-title={c.title}
+        visibility={c.visibility}
+        progress={c.myProgress ?? 0}
+        target={c.target}
+      ></hl-challenge-card>
+      <div class="head"><span class="badge">{c.status}</span></div>
       {#if c.description}<p>{c.description}</p>{/if}
       <p class="muted">Target {c.target} · {c.startsOn} → {c.endsOn}</p>
       <div class="progress">
-        <hl-progress-ring value={c.myProgress ?? 0} max={c.target} label={`${c.myProgress ?? 0}/${c.target}`}></hl-progress-ring>
         <div>
           <strong>Your progress: {c.myProgress ?? 0}/{c.target}</strong>
           <div class="muted">{c.completed ? 'Completed 🎉' : 'In progress'}</div>
@@ -57,8 +87,14 @@
     <div class="card grow">
       <h2>Invite a teammate</h2>
       <form onsubmit={invite}>
-        <div class="field"><label class="label" for="userId">User ID (same tenant)</label><input class="input" id="userId" bind:value={inviteUserId} required /></div>
-        <button class="btn btn-primary" type="submit">Send invite</button>
+        <div class="field">
+          <label class="label" for="userId">User ID (same tenant)</label>
+          <input class="input" id="userId" bind:value={inviteUserId} required placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          <span class="field-hint">Use the teammate's user ID from Profile &amp; settings, not their email.</span>
+        </div>
+        <button class="btn btn-primary" type="submit" disabled={sendingInvite}>
+          {sendingInvite ? 'Sending…' : 'Send invite'}
+        </button>
       </form>
     </div>
   </div>
@@ -75,19 +111,17 @@
         </tbody>
       </table>
     {:else}
-      <p class="muted">No participants yet.</p>
+      <div class="empty-state compact">
+        <div class="empty-state-copy"><strong>You're first on the board</strong><p>Invite teammates to start building the leaderboard.</p></div>
+      </div>
     {/if}
   </div>
-{:else if !error}
-  <p class="muted">Loading…</p>
 {/if}
 
 <style>
   .two { align-items: stretch; margin-bottom: 1rem; }
   .grow { flex: 1; min-width: 280px; }
-  .head { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .head { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
   .progress { display: flex; align-items: center; gap: 0.8rem; margin-top: 0.75rem; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border); }
-  th { color: var(--text-muted); font-size: 0.85rem; }
+  .card { overflow-x: auto; }
 </style>

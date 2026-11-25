@@ -8,7 +8,9 @@ import com.habitloop.analytics.dto.WeeklyStatResponse;
 import com.habitloop.analytics.store.AnalyticsItem;
 import com.habitloop.analytics.store.AnalyticsKeys;
 import com.habitloop.analytics.store.AnalyticsStore;
+import com.habitloop.common.exception.InvalidRequestException;
 import com.habitloop.common.security.SecurityUtils;
+import com.habitloop.common.time.TimeZones;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -30,7 +32,7 @@ public class AnalyticsQueryService {
 
     public SummaryResponse summary() {
         String pk = pk();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(TimeZones.INDIA);
         int completedToday = store.get(pk, AnalyticsKeys.skDaily(today))
                 .map(AnalyticsItem::getCompletions).orElse(0);
 
@@ -43,6 +45,9 @@ public class AnalyticsQueryService {
     }
 
     public List<DailyStatResponse> daily(LocalDate from, LocalDate to) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new InvalidRequestException("from must not be after to");
+        }
         String pk = pk();
         return store.queryPrefix(pk, AnalyticsKeys.SK_DAILY_PREFIX).stream()
                 .map(item -> new DailyStatResponse(stripPrefix(item.getSk(), AnalyticsKeys.SK_DAILY_PREFIX),
@@ -53,7 +58,10 @@ public class AnalyticsQueryService {
     }
 
     public List<WeeklyStatResponse> weekly(int weeks) {
-        return weeklyTrend(pk(), weeks <= 0 ? DEFAULT_TREND_WEEKS : weeks);
+        if (weeks < 1 || weeks > 52) {
+            throw new InvalidRequestException("weeks must be between 1 and 52");
+        }
+        return weeklyTrend(pk(), weeks);
     }
 
     public PatternSummaryResponse pattern() {

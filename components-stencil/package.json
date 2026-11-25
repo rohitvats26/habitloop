@@ -22,9 +22,11 @@
   "files": ["dist/", "loader/"],
   "scripts": {
     "build": "stencil build",
+    "test": "vitest run",
     "start": "stencil build --dev --watch --serve"
   },
   "devDependencies": {
-    "@stencil/core": "^4.22.0"
+    "@stencil/core": "^4.22.0",
+    "vitest": "^2.1.9"
   }
 }

@@ -11,12 +11,11 @@ This repository answers the three assignment sessions end to end:
 | Session | Scope | Where | Verified |
 |---|---|---|---|
 | **1 — Microservices Design** | 6 Spring Boot services + shared `common`, DB-per-service, event-driven, multi-tenancy, JWT/RBAC | [`backend/`](backend/) | ✅ `mvn test` → **54 unit/integration tests pass** |
-| **2 — Frontend Design** | SvelteKit (Svelte 5 Runes) **static SPA** for S3, 14 pages, client-side JWT auth + 7 Stencil web components | [`frontend/`](frontend/), [`components-stencil/`](components-stencil/) | ⚠️ Code complete; `npm`-build locally (Node not available in the build env) |
+| **2 — Frontend Design** | SvelteKit (Svelte 5 Runes) **static SPA** for S3/CloudFront, 14 pages, client-side JWT auth + 7 Stencil web components | [`frontend/`](frontend/), [`components-stencil/`](components-stencil/) | ✅ `npm run check`, frontend build, and Stencil build pass |
 | **3 — AWS Deployment & Security** | Terraform (9 modules), ECS Fargate, RDS, DynamoDB, EventBridge + Lambda, Secrets Manager, CloudWatch | [`infra/`](infra/), [`backend/lambda-normalizer/`](backend/lambda-normalizer/) | ✅ `terraform validate` → **valid**; **not deployed** (no AWS account) |
 
-> **Honest status.** Backend compiles and its tests pass. The frontend and Stencil library are complete
-> source but were not `npm`-built here (no Node in the build environment). The AWS infrastructure is
-> **written and validated, not deployed** — no `terraform apply` was run and nothing here is claimed as a
+> **Honest status.** Backend compiles and its tests pass. The frontend and Stencil library build locally.
+> AWS infrastructure is **written and validated, not deployed** — no `terraform apply` was run and nothing here is claimed as a
 > live deployment. See [infra/README.md](infra/README.md) for the deploy steps and known gaps.
 
 ---
@@ -66,7 +65,7 @@ habitloop/
 ## Technology stack
 
 **Backend:** Java 17 · Spring Boot 3.3.5 · Spring Security (JWT) · Spring Data JPA/Hibernate · Flyway · Apache Kafka · Resilience4j · springdoc-openapi · JUnit 5 + Mockito + Testcontainers · Maven
-**Frontend:** SvelteKit 2 · Svelte 5 Runes · adapter-node (SSR) · TypeScript · Stencil 4 web components
+**Frontend:** SvelteKit 2 · Svelte 5 Runes · adapter-static (SPA) · TypeScript · Stencil 4 web components
 **Data:** Amazon RDS (PostgreSQL) · Amazon DynamoDB (single-table)
 **AWS:** VPC · ALB · ECS Fargate · ECR · EventBridge · Lambda · SQS (DLQ) · SNS · Secrets Manager · IAM · CloudWatch
 **DevOps:** Docker · Docker Compose · Terraform · Git
@@ -82,8 +81,8 @@ habitloop/
 | `analytics-service`      | 8085 | DynamoDB `habitloop-analytics` | Aggregated stats, trends, cohort insights |
 | `recommendation-service` | 8086 | (reads analytics)           | Pattern analysis, timing/frequency recommendations |
 
-> **No standalone API gateway.** Routing is handled by **ALB path-based listener rules** on AWS and by the
-> SvelteKit server + Docker Compose networking locally — each service owns its `/api/...` path prefix.
+> **No standalone API gateway.** AWS uses **ALB path-based listener rules**; locally the browser calls each
+> service port directly and Docker Compose provides service-to-service networking.
 
 ## How the services interact
 
@@ -91,8 +90,9 @@ Two interaction styles — **synchronous** (REST, circuit-breaker protected) for
 **asynchronous** (events) for propagation and decoupling:
 
 **Synchronous (REST):**
-- The **SvelteKit static SPA** (on S3) calls the backend services from the browser via the ALB, sending the
-  JWT as a Bearer token; services enable CORS for the S3 origin.
+- The **SvelteKit static SPA** is served from private S3 through CloudFront. In AWS, CloudFront routes
+  `/api/*` to the ALB, so browser API calls are same-origin and send the JWT as a Bearer token. Local
+  development calls service ports directly and uses the configured CORS origins.
 - **challenge-service → user-service** `/internal/users/*` — verify a user exists in the same tenant before
   inviting (Resilience4j `@CircuitBreaker` with a fallback).
 - **recommendation-service → analytics-service** — pull the user's aggregated patterns on demand (also
@@ -137,7 +137,7 @@ Demo tenant seeded: `ACME2026` / `ria@acme.com` / `Password123!`.
 ### Frontend
 ```bash
 cd components-stencil && npm install && npm run build
-cd ../frontend && npm install && npm run dev      # SSR app on :3000
+cd ../frontend && npm install && npm run dev      # static SPA dev server on :5173
 ```
 
 ### AWS (Session 3 — design validated, not deployed)
@@ -156,9 +156,9 @@ Deploy steps and intentional gaps (MSK/Kafka, HTTPS/ACM, internal routing): [inf
   elements with typed props, lazy-loading and a generated loader; a good fit for a design-system library
   consumed by SvelteKit.
 - **Frontend hosting:** SvelteKit **static SPA (adapter-static) on Amazon S3**, per the case-study brief.
-  The browser calls the backend cross-origin via the ALB, so the JWT is a client-side Bearer token and the
-  services enable **CORS**. (A Node/SSR + httpOnly-cookie variant is possible but the brief specifies S3.)
-  Documented in `frontend/README.md`.
+  Private S3 content is served through CloudFront, which routes `/api/*` to the ALB. The JWT is a
+  client-side Bearer token; local development calls services directly and uses CORS. (A Node/SSR +
+  httpOnly-cookie variant is possible but the brief specifies S3.) Documented in `frontend/README.md`.
 - **IaC:** Terraform (over CloudFormation) — modular, provider-agnostic, easier to read/review.
 - **Multi-tenancy:** shared-schema with a `tenant_id` discriminator + Hibernate `@Filter`, enabled per
   transaction via an AOP aspect, driven by a `TenantContext` populated from the JWT. (Rationale in doc 08.)

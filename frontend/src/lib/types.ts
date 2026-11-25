@@ -4,6 +4,23 @@ export interface AuthUser {
   roles: string[];
 }
 
+export interface UserProfile {
+  id: string;
+  tenantId: string;
+  email: string;
+  displayName?: string;
+  timezone?: string;
+  avatarUrl?: string;
+  roles: string[];
+}
+
+export interface TenantInfo {
+  id: string;
+  name: string;
+  joinCode: string;
+  status: string;
+}
+
 export interface Habit {
   id: string;
   name: string;
@@ -23,6 +40,14 @@ export interface ActivityLog {
   unit?: string;
   occurredAt: string;
   source: 'MANUAL' | 'WEARABLE' | 'PARTNER';
+}
+
+export interface ActivityQuery {
+  type?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  size?: number;
 }
 
 export interface ChallengeSummary {
@@ -67,6 +92,22 @@ export interface AnalyticsSummary {
   trend: { week: string; completions: number }[];
 }
 
+export interface WeeklyStat {
+  week: string;
+  completions: number;
+}
+
+export interface PatternSummary {
+  byHour: Record<string, number>;
+  byWeekday: Record<string, number>;
+}
+
+export interface CohortSummary {
+  date: string;
+  activeUsers: number;
+  totalCompletions: number;
+}
+
 export interface Recommendation {
   type: string;
   habitId?: string;
@@ -74,6 +115,11 @@ export interface Recommendation {
   message: string;
   action: Record<string, unknown>;
   confidence: number;
+}
+
+export interface RecommendationResponse {
+  generatedAt: string;
+  items: Recommendation[];
 }
 
 export interface Page<T> {

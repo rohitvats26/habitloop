@@ -12,14 +12,14 @@ locals {
   alb_dns        = "http://${module.alb.alb_dns_name}"
   secrets_prefix = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:${var.name}/*"
 
-  # ALB path routing (mirrors the local Docker Compose / gateway routing).
+  # ALB rules route the same API prefixes that the local frontend calls on service ports.
   alb_services = {
-    "user-service"           = { port = 8081, priority = 10, health_check_path = "/actuator/health", path_patterns = ["/api/auth/*", "/api/users/*", "/api/tenants/*"] }
-    "activity-service"       = { port = 8082, priority = 20, health_check_path = "/actuator/health", path_patterns = ["/api/habits/*", "/api/activity/*"] }
-    "challenge-service"      = { port = 8083, priority = 30, health_check_path = "/actuator/health", path_patterns = ["/api/challenges/*", "/api/invitations/*"] }
-    "integration-service"    = { port = 8084, priority = 40, health_check_path = "/actuator/health", path_patterns = ["/api/integrations/*", "/api/webhooks/*"] }
+    "user-service"           = { port = 8081, priority = 10, health_check_path = "/actuator/health", path_patterns = ["/api/auth/*", "/api/users/*", "/api/tenants", "/api/tenants/*"] }
+    "activity-service"       = { port = 8082, priority = 20, health_check_path = "/actuator/health", path_patterns = ["/api/habits", "/api/habits/*", "/api/activity", "/api/activity/*"] }
+    "challenge-service"      = { port = 8083, priority = 30, health_check_path = "/actuator/health", path_patterns = ["/api/challenges", "/api/challenges/*", "/api/invitations", "/api/invitations/*"] }
+    "integration-service"    = { port = 8084, priority = 40, health_check_path = "/actuator/health", path_patterns = ["/api/integrations/*", "/api/webhooks", "/api/webhooks/*"] }
     "analytics-service"      = { port = 8085, priority = 50, health_check_path = "/actuator/health", path_patterns = ["/api/analytics/*"] }
-    "recommendation-service" = { port = 8086, priority = 60, health_check_path = "/actuator/health", path_patterns = ["/api/recommendations/*"] }
+    "recommendation-service" = { port = 8086, priority = 60, health_check_path = "/actuator/health", path_patterns = ["/api/recommendations", "/api/recommendations/*"] }
   }
 
   common_backend_env = {
@@ -48,7 +48,7 @@ locals {
     }
     "integration-service" = {
       image            = local.images["integration-service"], port = 8084, cpu = 256, memory = 512, desired_count = 1
-      environment      = merge(local.common_backend_env, { INTEGRATION_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_integration", INTEGRATION_DB_USER = "habitloop", WEBHOOK_BASE_URL = local.alb_dns })
+      environment      = merge(local.common_backend_env, { INTEGRATION_DB_URL = "jdbc:postgresql://${local.rds_host}:5432/habitloop_integration", INTEGRATION_DB_USER = "habitloop", WEBHOOK_BASE_URL = local.alb_dns, AWS_REGION = var.region, SECRET_STORE_BACKEND = "aws", SECRET_STORE_PREFIX = var.name })
       secrets          = { INTEGRATION_DB_PASSWORD = local.db_pwd_ref }
       target_group_arn = module.alb.target_group_arns["integration-service"]
     }
@@ -101,8 +101,11 @@ module "alb" {
 
 # Frontend: static SvelteKit build hosted on S3 (PDF Session 3).
 module "s3_frontend" {
-  source = "../../modules/s3"
-  name   = "${var.name}-${data.aws_caller_identity.current.account_id}"
+  source                     = "../../modules/s3"
+  name                       = "${var.name}-${data.aws_caller_identity.current.account_id}"
+  api_origin_domain_name     = var.api_origin_domain_name != "" ? var.api_origin_domain_name : module.alb.alb_dns_name
+  api_origin_protocol_policy = var.api_origin_domain_name != "" && var.certificate_arn != "" ? "https-only" : "http-only"
+  api_path_patterns          = flatten([for service in values(local.alb_services) : service.path_patterns])
 }
 
 # ECS tasks security group — created here (not in the ecs module) so RDS can reference it without a cycle.

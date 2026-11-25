@@ -9,8 +9,8 @@ output "frontend_bucket" {
 }
 
 output "frontend_url" {
-  description = "S3 website URL for the frontend (HTTP)"
-  value       = "http://${module.s3_frontend.website_endpoint}"
+  description = "CloudFront HTTPS URL for the static frontend"
+  value       = "https://${module.s3_frontend.distribution_domain_name}"
 }
 
 output "ecr_repository_urls" {

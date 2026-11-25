@@ -21,5 +21,6 @@ so they match the host app's light/dark theme automatically.
 ```bash
 npm install
 npm run build        # outputs dist/ and loader/
+npm test             # tests component calculation and input parsing
 ```
 Consumed by the frontend via `import { defineCustomElements } from '@habitloop/components/loader'`.

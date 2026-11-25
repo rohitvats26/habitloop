@@ -14,8 +14,10 @@ export function decodeJwt(token: string): AuthUser | null {
         .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join('')
     );
-    const claims = JSON.parse(json) as { sub: string; tenantId: string; roles?: string[]; exp?: number };
-    if (claims.exp && claims.exp * 1000 < Date.now()) return null;
+    const claims = JSON.parse(json) as { sub?: string; tenantId?: string; roles?: string[]; exp?: number };
+    if (!claims.sub || !claims.tenantId || typeof claims.exp !== 'number' || claims.exp * 1000 <= Date.now()) {
+      return null;
+    }
     return { userId: claims.sub, tenantId: claims.tenantId, roles: claims.roles ?? [] };
   } catch {
     return null;

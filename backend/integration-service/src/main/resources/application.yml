@@ -35,6 +35,8 @@ habitloop:
     bus-name: ${EVENT_BUS_NAME:}           # publishes partner.event.received
   integration:
     webhook-base-url: ${WEBHOOK_BASE_URL:http://localhost:8084}
+    secret-store: ${SECRET_STORE_BACKEND:memory}
+    secret-prefix: ${SECRET_STORE_PREFIX:hl}
 
 management:
   endpoints:

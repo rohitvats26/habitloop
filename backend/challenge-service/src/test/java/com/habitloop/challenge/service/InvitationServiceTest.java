@@ -11,6 +11,7 @@ import com.habitloop.challenge.mapper.ChallengeMapper;
 import com.habitloop.challenge.repository.ChallengeInvitationRepository;
 import com.habitloop.challenge.repository.ChallengeParticipantRepository;
 import com.habitloop.challenge.repository.ChallengeRepository;
+import com.habitloop.common.time.TimeZones;
 import com.habitloop.common.exception.CrossTenantAccessException;
 import com.habitloop.common.exception.DuplicateResourceException;
 import com.habitloop.common.security.AuthUser;
@@ -133,8 +134,8 @@ class InvitationServiceTest {
         c.setVisibility(Visibility.PRIVATE);
         c.setMetric("DAYS_COMPLETED");
         c.setTarget(new BigDecimal("30"));
-        c.setStartsOn(LocalDate.now().minusDays(1));
-        c.setEndsOn(LocalDate.now().plusDays(10));
+        c.setStartsOn(LocalDate.now(TimeZones.INDIA).minusDays(1));
+        c.setEndsOn(LocalDate.now(TimeZones.INDIA).plusDays(10));
         return c;
     }
 }

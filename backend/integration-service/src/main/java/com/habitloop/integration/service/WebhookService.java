@@ -1,15 +1,16 @@
 package com.habitloop.integration.service;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.habitloop.common.exception.BusinessException;
+import com.habitloop.common.exception.InvalidRequestException;
 import com.habitloop.common.exception.ResourceNotFoundException;
 import com.habitloop.common.exception.UnauthorizedException;
+import com.habitloop.integration.dto.WebhookResponse;
 import com.habitloop.integration.entity.ConnectionStatus;
 import com.habitloop.integration.entity.PartnerConnection;
 import com.habitloop.integration.entity.ProcessingStatus;
 import com.habitloop.integration.entity.RawPartnerEvent;
-import com.habitloop.integration.dto.WebhookResponse;
 import com.habitloop.integration.event.PartnerEventPublisher;
 import com.habitloop.integration.event.PartnerEventReceived;
 import com.habitloop.integration.repository.PartnerConnectionRepository;
@@ -23,7 +24,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.UUID;
 
 /**
@@ -35,6 +39,8 @@ import java.util.UUID;
 public class WebhookService {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookService.class);
+    private static final int MAX_PAYLOAD_BYTES = 256 * 1024;
+    private static final int MAX_EXTERNAL_EVENT_ID_LENGTH = 128;
 
     private final PartnerConnectionRepository connections;
     private final RawPartnerEventRepository rawEvents;
@@ -53,6 +59,7 @@ public class WebhookService {
 
     @Transactional
     public WebhookResponse ingest(UUID connectionId, String signature, String rawBody) {
+        validatePayloadSize(rawBody);
         PartnerConnection connection = connections.findById(connectionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Connection", connectionId));
         if (connection.getStatus() == ConnectionStatus.REVOKED) {
@@ -96,16 +103,104 @@ public class WebhookService {
 
     private String extractExternalEventId(String rawBody) {
         try {
-            JsonNode root = objectMapper.readTree(rawBody);
-            String id = root.path("externalEventId").asText(null);
-            if (!StringUtils.hasText(id)) {
-                throw new BusinessException("externalEventId is required");
+            JsonNode root = objectMapper.reader()
+                    .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                    .readTree(rawBody);
+            if (!root.isObject()) {
+                throw new InvalidRequestException("Webhook payload must be a JSON object");
             }
+            JsonNode idNode = root.path("externalEventId");
+            if (!idNode.isTextual()) {
+                throw new InvalidRequestException("externalEventId must be a non-empty string");
+            }
+            String id = idNode.textValue();
+            if (!StringUtils.hasText(id) || !id.equals(id.strip())
+                    || id.chars().anyMatch(Character::isISOControl)) {
+                throw new InvalidRequestException(
+                        "externalEventId must be a non-empty string without surrounding whitespace");
+            }
+            if (id.length() > MAX_EXTERNAL_EVENT_ID_LENGTH) {
+                throw new InvalidRequestException("externalEventId must not exceed 128 characters");
+            }
+            validateOptionalText(root, "type", 40);
+            validateOptionalText(root, "unit", 20);
+            validateOptionalValue(root.path("value"));
+            validateOptionalOccurredAt(root.path("occurredAt"));
+            validateOptionalHabitId(root.path("habitId"));
             return id;
-        } catch (BusinessException be) {
-            throw be;
+        } catch (InvalidRequestException invalidRequest) {
+            throw invalidRequest;
         } catch (Exception e) {
-            throw new BusinessException("Malformed JSON payload");
+            throw new InvalidRequestException("Malformed JSON payload");
+        }
+    }
+
+    private void validateOptionalText(JsonNode root, String field, int maxLength) {
+        JsonNode value = root.path(field);
+        if (value.isMissingNode() || value.isNull()) {
+            return;
+        }
+        if (!value.isTextual() || !StringUtils.hasText(value.textValue())
+                || value.textValue().length() > maxLength) {
+            throw new InvalidRequestException(field + " must be a non-empty string of at most "
+                    + maxLength + " characters");
+        }
+    }
+
+    private void validateOptionalValue(JsonNode value) {
+        if (value.isMissingNode() || value.isNull()) {
+            return;
+        }
+        if (!value.isNumber()) {
+            throw new InvalidRequestException("value must be a non-negative number with at most 2 decimal places");
+        }
+        BigDecimal decimal = value.decimalValue();
+        int integerDigits = Math.max(decimal.precision() - decimal.scale(), 0);
+        int fractionDigits = Math.max(decimal.scale(), 0);
+        if (decimal.signum() < 0 || integerDigits > 10 || fractionDigits > 2) {
+            throw new InvalidRequestException("value must be a non-negative number with at most 10 integer "
+                    + "digits and 2 decimal places");
+        }
+    }
+
+    private void validateOptionalOccurredAt(JsonNode value) {
+        if (value.isMissingNode() || value.isNull()) {
+            return;
+        }
+        if (!value.isTextual()) {
+            throw new InvalidRequestException("occurredAt must be an ISO-8601 date-time");
+        }
+        try {
+            OffsetDateTime.parse(value.textValue());
+        } catch (DateTimeParseException ex) {
+            throw new InvalidRequestException("occurredAt must be an ISO-8601 date-time");
+        }
+    }
+
+    private void validateOptionalHabitId(JsonNode value) {
+        if (value.isMissingNode() || value.isNull()) {
+            return;
+        }
+        if (!value.isTextual()) {
+            throw new InvalidRequestException("habitId must be a valid UUID");
+        }
+        try {
+            UUID habitId = UUID.fromString(value.textValue());
+            if (!habitId.toString().equalsIgnoreCase(value.textValue())) {
+                throw new IllegalArgumentException("UUID must use the standard format");
+            }
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidRequestException("habitId must be a valid UUID");
+        }
+    }
+
+    private void validatePayloadSize(String rawBody) {
+        if (!StringUtils.hasText(rawBody)) {
+            throw new InvalidRequestException("Webhook payload is required");
+        }
+        if (rawBody.length() > MAX_PAYLOAD_BYTES
+                || rawBody.getBytes(StandardCharsets.UTF_8).length > MAX_PAYLOAD_BYTES) {
+            throw new InvalidRequestException("Webhook payload must not exceed 256 KB");
         }
     }
 }

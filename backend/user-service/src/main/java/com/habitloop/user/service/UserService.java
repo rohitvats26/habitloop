@@ -12,7 +12,6 @@ import com.habitloop.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
 import java.util.UUID;
 
 @Service
@@ -44,9 +43,7 @@ public class UserService {
         if (req.displayName() != null) {
             profile.setDisplayName(req.displayName().trim());
         }
-        if (StringUtils.hasText(req.timezone())) {
-            profile.setTimezone(req.timezone().trim());
-        }
+        profile.setTimezone(StringUtils.hasText(req.timezone()) ? req.timezone().trim() : UserProfile.TIMEZONE);
         if (req.avatarUrl() != null) {
             profile.setAvatarUrl(req.avatarUrl().trim());
         }

@@ -7,6 +7,7 @@ import com.habitloop.challenge.entity.ChallengeStatus;
 import com.habitloop.challenge.repository.ChallengeParticipantRepository;
 import com.habitloop.challenge.repository.ChallengeProgressEventRepository;
 import com.habitloop.challenge.repository.ChallengeRepository;
+import com.habitloop.common.time.TimeZones;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -43,7 +44,7 @@ public class ProgressService {
     @Transactional
     public void applyActivity(UUID tenantId, UUID userId, UUID activityLogId) {
         List<ChallengeParticipant> parts = participants.findByTenantIdAndUserId(tenantId, userId);
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(TimeZones.INDIA);
         for (ChallengeParticipant p : parts) {
             Challenge c = challenges.findByIdAndTenantIdAndDeletedAtIsNull(p.getChallengeId(), tenantId)
                     .orElse(null);

@@ -23,15 +23,18 @@ For each step: what Ria does in the UI, the API call behind it, and what happens
 ---
 
 ## Step 1 — Register
-**UI:** `/register` → fills email, password, display name, tenant name → submit.
+**UI:** `/register` → fills email, password, display name, tenant name → submit. The app uses India Standard Time and does not ask for a timezone.
 **API:** `POST {userBase}/api/auth/register`
 ```json
 { "email": "ria@acme.com", "password": "Password123!", "displayName": "Ria",
   "timezone": "Asia/Kolkata", "tenantName": "Acme Wellness" }
 ```
 **Behind the scenes (user-service):** creates the `Tenant`, the `User` (BCrypt-hashed password), a
-`UserProfile`, and assigns the `TENANT_ADMIN` role. The SPA then auto-logs-in and stores the JWT client-side
-(`localStorage`), sending it as a `Authorization: Bearer` header on subsequent calls.
+`UserProfile`, and assigns the `TENANT_ADMIN` role. The SPA supplies the fixed `Asia/Kolkata` timezone
+without asking the user to enter it. It then auto-logs-in and stores the JWT client-side (`sessionStorage`),
+sending the token as an
+`Authorization: Bearer` header on subsequent calls. In AWS, those
+requests use the same-origin CloudFront `/api/*` route; local development calls service ports directly.
 
 ## Step 2 — Log in (if returning)
 **UI:** `/login`. **API:** `POST {userBase}/api/auth/login` → `{ accessToken, refreshToken, expiresIn }`.
@@ -107,6 +110,19 @@ analytics-driven.
 recommendation would instead set `perWeek`).
 **Result:** the habit's schedule updates, a fresh `activity.logged`-style change propagates, and the next
 analytics/recommendation cycle reflects the accepted change. Ria sees a toast confirming the update.
+
+## Other product workflows
+- **Habits:** open recent completion history from each habit card; dates are displayed in IST.
+- **Activity:** filter the activity log by type and IST date range, page through results, and export the
+  current page as CSV.
+- **Challenges:** search the loaded challenge feed and narrow it by visibility or lifecycle status.
+- **Invitations:** accept and open a challenge in one action, or accept/reject it from the invitation list.
+- **Integrations:** copy one-time API credentials and webhook URLs, and confirm before revoking a connection.
+- **Analytics:** choose a daily date range and weekly horizon, inspect weekday/hour patterns, and export
+  daily or weekly results to CSV.
+- **Recommendations:** request suggestions for all habits or a selected active habit, then apply supported
+  schedule changes to a chosen habit.
+- **Profile:** preview an avatar URL and copy account identifiers for invitations and tenant onboarding.
 
 ---
 

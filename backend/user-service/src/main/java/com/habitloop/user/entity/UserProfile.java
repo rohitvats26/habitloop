@@ -1,5 +1,6 @@
 package com.habitloop.user.entity;
 
+import com.habitloop.common.time.TimeZones;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -13,6 +14,8 @@ import java.util.UUID;
 @Table(name = "user_profiles")
 public class UserProfile {
 
+    public static final String TIMEZONE = TimeZones.INDIA_TIMEZONE;
+
     @Id
     @Column(name = "user_id")
     private UUID userId;
@@ -24,7 +27,7 @@ public class UserProfile {
     private String displayName;
 
     @Column(nullable = false, length = 64)
-    private String timezone = "UTC";
+    private String timezone = TIMEZONE;
 
     @Column(name = "avatar_url", length = 512)
     private String avatarUrl;

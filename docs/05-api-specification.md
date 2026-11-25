@@ -1,8 +1,9 @@
 # 05 — REST API Specification
 
-There is **no API gateway**; each service is reached on its own port (routing is done by the ALB on AWS and
-by the SvelteKit server locally). Local base URLs: user `:8081`, activity `:8082`, challenge `:8083`,
-integration `:8084`, analytics `:8085`, recommendation `:8086`. All endpoints (except auth + webhooks)
+There is **no standalone API gateway**. Locally, the static SvelteKit app calls each service on its own
+port; in AWS, CloudFront serves the static app and routes `/api/*` to the ALB, which selects a service by
+path. Local base URLs: user `:8081`, activity `:8082`, challenge `:8083`, integration `:8084`,
+analytics `:8085`, recommendation `:8086`. All endpoints (except auth + webhooks)
 require `Authorization: Bearer <JWT>`. The JWT carries `tenantId`, `userId`, `roles`; the tenant is
 **never** taken from the request body — it is derived from the token server-side. Every service serves live
 Swagger UI at `/swagger-ui.html` via springdoc-openapi. A ready-to-run **Postman collection** is in
@@ -16,13 +17,16 @@ Standard error envelope (all services):
   "path": "/api/habits",
   "status": 400,
   "code": "VALIDATION_ERROR",
-  "message": "name must not be blank",
+  "message": "Please correct the invalid fields: name: must not be blank",
   "details": ["name: must not be blank"]
 }
 ```
 
 Common status codes: `400` validation, `401` missing/invalid JWT, `403` wrong role / cross-tenant,
 `404` not found (or hidden cross-tenant), `409` conflict/duplicate, `422` business rule, `429` rate limit.
+Malformed JSON and invalid UUID/date/enum parameters also return `400` with the same envelope. Paged
+endpoints cap page size at 100. Activity and analytics date ranges require `from` to be on or before `to`;
+the weekly analytics range accepts 1–52 weeks.
 
 ---
 
@@ -34,10 +38,10 @@ Common status codes: `400` validation, `401` missing/invalid JWT, `403` wrong ro
 | POST | `/api/auth/login` | public | authenticate, return JWT |
 | POST | `/api/auth/refresh` | public | exchange refresh token |
 | GET  | `/api/users/me` | USER | current profile |
-| PUT  | `/api/users/me` | USER | update profile (display name, timezone, avatar) |
+| PUT  | `/api/users/me` | USER | update profile (display name, fixed timezone, avatar) |
 | GET  | `/api/users/{id}` | TENANT_ADMIN | fetch a tenant user |
 | GET  | `/internal/users/{id}` | service | internal verify (same-tenant) |
-| GET  | `/api/tenants/me` | TENANT_ADMIN | tenant details |
+| GET  | `/api/tenants/me` | USER, TENANT_ADMIN | current tenant details and join code |
 
 **Register — request**
 ```json
@@ -45,9 +49,14 @@ POST /api/auth/register
 { "email": "ria@acme.com", "password": "S3cure!pass", "displayName": "Ria",
   "timezone": "Asia/Kolkata", "tenantName": "Acme Wellness" }
 ```
+The UI does not ask users to choose a timezone. It always sends `Asia/Kolkata`; the user-service rejects any other value and uses India Standard Time if the field is omitted.
+Registration requires a valid email, a password of 8–72 characters, a display name of at most 80
+characters, and exactly one of `tenantName` or `joinCode`. Login fields are bounded to their storage
+limits. Profile updates must include at least one field.
 **Register — response `201`**
 ```json
-{ "userId": "9f1c...", "tenantId": "a21b...", "email": "ria@acme.com", "roles": ["TENANT_ADMIN"] }
+{ "id": "9f1c...", "tenantId": "a21b...", "email": "ria@acme.com",
+  "timezone": "Asia/Kolkata", "roles": ["TENANT_ADMIN"] }
 ```
 **Login — response `200`**
 ```json
@@ -78,6 +87,9 @@ POST /api/habits
   "schedule": { "daysOfWeek": [1,3,5], "targetTime": "07:00", "perWeek": 3 },
   "targetPerPeriod": 3 }
 ```
+Habit schedules accept `daysOfWeek` (unique ISO weekdays 1–7), `targetTime` (`HH:mm`), and `perWeek`
+(an integer from 1–7). A `CUSTOM` schedule requires either `daysOfWeek` or `perWeek`; unknown schedule
+fields are rejected. Updates must contain at least one field; targets must be positive.
 **Response `201`**
 ```json
 { "id": "4d2e...", "name": "Morning run", "frequency": "CUSTOM",
@@ -90,6 +102,7 @@ POST /api/habits/4d2e.../completions   { "date": "2026-11-23", "note": "felt gre
 200 → { "completionId": "7a...", "date": "2026-11-23", "streak": { "current": 5, "longest": 12 } }
 ```
 Duplicate same-day completion → `409 DUPLICATE_COMPLETION`.
+Completion dates use IST and cannot be in the future; historical dates are accepted for backfilling.
 
 ---
 
@@ -113,6 +126,8 @@ POST /api/challenges
   "visibility": "PUBLIC", "metric": "DAYS_COMPLETED", "target": 30,
   "startsOn": "2026-12-01", "endsOn": "2026-12-30" }
 ```
+Challenge targets must fit the database precision (up to 10 integer digits and 2 decimal places), and
+`endsOn` must not precede `startsOn`.
 **Details — response `200`**
 ```json
 { "id": "c3...", "title": "30-day Move", "visibility": "PUBLIC", "status": "ACTIVE",
@@ -122,6 +137,8 @@ POST /api/challenges
 ```
 Inviting a user not in your tenant → `404` (not revealed). Joining a `PRIVATE` challenge without an invite
 → `403`.
+Challenge invitations require `userId` as a standard UUID (the user's ID shown in Profile & settings);
+email addresses are not accepted.
 
 ---
 
@@ -146,7 +163,10 @@ POST /api/webhooks/b7...
   "occurredAt": "2026-11-23T06:40:00Z", "userRef": "fitbit-user-55" }
 ```
 **Responses:** `202 Accepted` (queued), `200` (duplicate, no-op), `401` (bad signature),
-`400` (invalid payload), `409` only if a hard conflict. Body:
+`400` (invalid payload; JSON body up to 256 KB with a non-empty string `externalEventId` of at most
+128 characters). Optional `type` and `unit` values must be non-empty strings of at most 40 and 20
+characters, `value` must be a non-negative number within 12,2 precision, `occurredAt` must be an
+ISO-8601 date-time, and `habitId` must be a UUID. `409` only if a hard conflict. Body:
 ```json
 202 → { "status": "ACCEPTED", "rawEventId": "r9...", "deduplicated": false }
 ```

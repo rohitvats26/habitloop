@@ -7,6 +7,7 @@ import com.habitloop.challenge.entity.Visibility;
 import com.habitloop.challenge.repository.ChallengeParticipantRepository;
 import com.habitloop.challenge.repository.ChallengeProgressEventRepository;
 import com.habitloop.challenge.repository.ChallengeRepository;
+import com.habitloop.common.time.TimeZones;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -107,8 +108,8 @@ class ProgressServiceTest {
         c.setMetric("DAYS_COMPLETED");
         c.setTarget(target);
         c.setStatus(ChallengeStatus.ACTIVE);
-        c.setStartsOn(LocalDate.now().minusDays(1));
-        c.setEndsOn(LocalDate.now().plusDays(10));
+        c.setStartsOn(LocalDate.now(TimeZones.INDIA).minusDays(1));
+        c.setEndsOn(LocalDate.now(TimeZones.INDIA).plusDays(10));
         return c;
     }
 }

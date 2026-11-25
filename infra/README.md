@@ -52,11 +52,11 @@ terraform apply
 # 3. Build + upload the static frontend to S3
 #    The bucket name includes the AWS account ID to ensure global S3 name uniqueness.
 cd ../../../frontend
-#   set every VITE_*_SERVICE_URL in .env to the ALB URL: terraform output -raw alb_dns_name
+#   set every VITE_*_SERVICE_URL in .env to the HTTPS frontend URL: terraform output -raw frontend_url
 npm install && npm run build
 aws s3 sync build/ s3://$(cd ../infra/envs/dev && terraform output -raw frontend_bucket)/ --delete
 
-# App URL:   terraform output -raw frontend_url      (S3 website, HTTP)
+# App URL:   terraform output -raw frontend_url      (CloudFront, HTTPS)
 # API URL:   terraform output -raw alb_dns_name
 ```
 
@@ -71,12 +71,14 @@ Fargate (~7 small tasks) and the ALB have no free tier, so a short-lived demo ke
 
 ## Known gaps (documented)
 - **HTTPS/TLS:** the ALB listener is HTTP:80 by default; set `certificate_arn` (needs a domain + ACM cert)
-  to add an HTTPS:443 listener with an 80→443 redirect. The **S3 website endpoint is HTTP-only** — true
-  HTTPS for the static site would need **CloudFront**, which is outside the PDF's resource list.
+  to add an HTTPS:443 listener with an 80→443 redirect. The static frontend is delivered over HTTPS by
+  CloudFront using its default certificate. For HTTPS from CloudFront to the API origin, also set
+  `api_origin_domain_name` to a DNS name for the ALB covered by that certificate; without those settings,
+  the dev stack uses HTTP on the private CloudFront-to-ALB hop.
 - **Internal event chain on AWS:** implemented over **EventBridge + SQS** (`EVENTS_TRANSPORT=eventbridge`).
   Services PutEvents to the bus; each consumer long-polls its own SQS queue (EventBridge rule → SQS), and the
   Lambda normalizer publishes `partner.activity.normalized` back to the bus — so the deployed
   activity→analytics→recommendation flow runs end-to-end (no MSK needed). Kafka is only the local transport.
 - **Service-to-service calls** use the public ALB DNS for simplicity; production would use an internal ALB or
   ECS Service Connect / Cloud Map and keep `/internal/*` off the public listener.
-- **CORS** defaults to `*` (`habitloop.cors.allowed-origins`); tighten to the S3 website origin for production.
+- **CORS** defaults to `*` (`habitloop.cors.allowed-origins`); tighten to the CloudFront frontend origin for production.

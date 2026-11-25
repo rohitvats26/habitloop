@@ -5,7 +5,8 @@
 >
 > **Revision (PDF-aligned, free-tier).** The Terraform under `infra/` was trimmed to the case-study PDF's
 > resource list and made free-tier-friendly:
-> - **Frontend → Amazon S3** static hosting (not an ECS container). ECS now runs the 6 backend services only.
+> - **Frontend → private Amazon S3 behind CloudFront** (not an ECS container). ECS runs the 6 backend
+>   services only; CloudFront routes `/api/*` to the ALB.
 > - **No NAT Gateway** (not in the PDF): private app subnets reach AWS via **VPC endpoints** (S3 + DynamoDB
 >   gateway, ECR + Secrets Manager + CloudWatch Logs interface).
 > - **Network ACLs** added per subnet tier.
@@ -15,7 +16,8 @@
 > - **Internal events run over EventBridge + SQS** (`EVENTS_TRANSPORT=eventbridge`): services PutEvents to the
 >   bus, and each consumer long-polls its own SQS queue (EventBridge rule → SQS). No MSK/Kafka on AWS; Kafka is
 >   the local-Compose transport only.
-> - Backend services enable **CORS** (browser → ALB cross-origin from the S3 site).
+> - Production browser API traffic is same-origin through CloudFront; CORS is only needed for local
+>   development's direct browser-to-service calls.
 
 Rendered topology: see diagram 5 in [03-diagrams.md](03-diagrams.md).
 
@@ -41,7 +43,7 @@ Rendered topology: see diagram 5 in [03-diagrams.md](03-diagrams.md).
 
 - **ECR:** one repository per service (`habitloop/user-service`, …). Images tagged with git SHA.
 - **ECS cluster** on **Fargate** (serverless containers; no EC2 to manage).
-- **One ECS service per microservice** (+ gateway), each a task definition referencing its ECR image,
+- **One ECS service per microservice**, each a task definition referencing its ECR image,
   CPU/memory sized per profile (Integration/Analytics larger), env + secrets injected.
 - **Auto Scaling:** target-tracking on CPU (e.g. 60%) and ALB request-count-per-target; min 2 / max N
   tasks per service across both AZs.
@@ -54,7 +56,8 @@ Rendered topology: see diagram 5 in [03-diagrams.md](03-diagrams.md).
 ## 3. Load balancing (ALB)
 
 - **Application Load Balancer** in public subnets, HTTPS listener (ACM cert), HTTP→HTTPS redirect.
-- **Path-based routing** to target groups (mirrors the local Spring Cloud Gateway):
+- **Path-based routing** to the backend service target groups (the ALB is the AWS entry point; locally,
+  clients call service ports directly):
   `/api/auth/*`,`/api/users/*` → user-service; `/api/habits/*`,`/api/activity/*` → activity-service;
   `/api/challenges/*`,`/api/invitations/*` → challenge-service; `/api/integrations/*`,`/api/webhooks/*`
   → integration-service; `/api/analytics/*` → analytics-service; `/api/recommendations/*` →

@@ -36,7 +36,6 @@ independently and lets us use the right datastore per service (RDS vs DynamoDB).
 | **integration-service** | connections, raw partner events | `partner.event.received` (to EventBridge) | — | — |
 | **analytics-service** | aggregates (DynamoDB) | `analytics.updated` | `activity.logged`, `challenge.*` | — |
 | **recommendation-service** | — (stateless/cache) | — | `analytics.updated` (cache-bust) | analytics-service (read aggregates) |
-| **api-gateway** | — | — | — | all (routing) |
 
 **Boundary rules enforced:**
 - No service connects to another's database.
@@ -72,7 +71,8 @@ Shared concerns (JWT parsing, `TenantContext`, common DTOs/errors, event envelop
 ## 4. Communication patterns
 
 ### Synchronous (REST, JSON)
-- Client → **api-gateway** → service. The gateway validates the JWT once and forwards it.
+- Locally, clients call each service on its own port. In AWS, the ALB routes requests to the matching
+  service. Each service validates the JWT itself; there is no standalone API Gateway service.
 - A few **read-only** service-to-service calls (e.g. challenge-service verifying an invitee exists in
   user-service) go through an internal client with a **timeout + circuit breaker** (Resilience4j).
 
@@ -93,22 +93,22 @@ normalization code (AS-13), so the same end-to-end flow is demonstrable without 
 **SvelteKit** application, static-adapter build hosted on S3/CloudFront.
 
 - **Routing:** SvelteKit file-based routes under `src/routes` — one route per required page.
-- **State:** **Svelte 5 Runes** (`$state`, `$derived`, `$effect`) in `src/lib/stores/*.svelte.ts` modules
-  for auth/session, habits, challenges, analytics caches.
+- **State:** **Svelte 5 Runes** (`$state`, `$derived`, `$effect`) for page-local view state, with shared
+  auth/session and toast state in `src/lib/auth.svelte.ts` and `src/lib/stores/toast.svelte.ts`.
 - **Reusable UI:** cross-cutting, framework-agnostic widgets are built as a **Stencil** component library
-  (`frontend/components-stencil/`, its own compiler build) that emits standards-based custom elements
+  (`components-stencil/`, its own compiler build) that emits standards-based custom elements
   (progress ring, chart widget, partner tile, etc.) — consumable by SvelteKit or any framework.
   Svelte-specific layout pieces that compose those elements stay as Svelte components in
   `src/lib/components/`.
-- **Server interaction:** the app is a **static SPA** (adapter-static → S3, per the PDF). Data loads in
-  `onMount` and create/accept/connect actions call a typed browser API client (`src/lib/api.ts`) directly.
-  > Original design used SSR + form actions; moved to a static S3 SPA to match the Session 3 brief (S3 for
-  > the frontend). See `frontend/README.md`.
-- **Auth:** JWT held client-side (`localStorage`, `src/lib/auth.svelte.ts`) and sent as a Bearer header;
-  the `(app)` route group is guarded by `(app)/+layout.ts`. Backend services enable CORS for the S3 origin.
+- **Server interaction:** the app is a **static SPA** (adapter-static → private S3 via CloudFront, per the
+  PDF). Data loads in `onMount` and actions use the browser API client (`src/lib/api.ts`); CloudFront routes
+  `/api/*` to the ALB, so production requests stay same-origin.
+- **Auth:** JWT held client-side (`sessionStorage`, `src/lib/auth.svelte.ts`) and sent as a Bearer header;
+  expired tokens are rejected by the client route guard. The `(app)` route group is guarded by
+  `(app)/+layout.ts`.
 - **States:** every data view handles loading / empty / error / success explicitly.
-- **Live updates:** after a form action or a received device event, affected stores are invalidated so
-  dashboards re-render (SvelteKit `invalidate` + optional SSE/poll for device events).
+- **Refresh:** pages reload their own data after mutations. External device events appear on the next
+  page load; live SSE/polling is not currently implemented.
 
 ### Page → service mapping
 
@@ -149,7 +149,7 @@ binds to them with `on:` handlers after importing the generated loader.
 | API docs | **springdoc-openapi** | manual | Generates OpenAPI/Swagger UI from controllers automatically. |
 | Mapping | **MapStruct** | manual mappers | Compile-time, fast, no reflection. |
 | Integration tests | **Testcontainers** | H2/embedded | Real Postgres/Kafka/DynamoDB-Local in tests = realistic behaviour. |
-| Gateway | **Spring Cloud Gateway** | Nginx | JWT relay + routing in the same ecosystem; ALB does the same job in AWS. |
+| API entry/routing | **Direct service ports locally; ALB path routing in AWS** | Spring Cloud Gateway | Matches the implemented topology without adding a separate gateway service. |
 | Auth token | **JWT (HS256 dev / RS256 prod)** | opaque + session store | Stateless, service-friendly; secret/key in Secrets Manager. |
 
 ---
@@ -163,15 +163,15 @@ binds to them with `on:` handlers after importing the generated loader.
   in MDC; shipped to CloudWatch Logs.
 - **Config & secrets:** no secrets in code or images. Local uses `.env` + Docker Compose; AWS uses
   Secrets Manager injected as ECS task secrets.
-- **Tracing/correlation:** a `X-Correlation-Id` is generated at the gateway and propagated through
-  REST headers and the event envelope.
+- **Tracing/correlation:** a `X-Correlation-Id` is propagated through REST headers and the event envelope;
+  this does not depend on a standalone gateway.
 
 ---
 
 ## 8. Build & run topology
 
 - **Local:** `docker-compose up` brings up Postgres, Kafka (+Zookeeper/KRaft), DynamoDB Local, all six
-  services, the gateway, and the SvelteKit dev/preview server. The partner-event normalizer runs as a
-  local consumer standing in for Lambda.
+  services, and the SvelteKit dev/preview server. Clients reach services on their published ports. The
+  partner-event normalizer runs as a local consumer standing in for Lambda.
 - **AWS:** images in ECR → ECS services behind an ALB in a VPC (private subnets); RDS + DynamoDB in the
   data tier; EventBridge rule → Lambda; SvelteKit build in S3 behind CloudFront. Full detail in doc 06.

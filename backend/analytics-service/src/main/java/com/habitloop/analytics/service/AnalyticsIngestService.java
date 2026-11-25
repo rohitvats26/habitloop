@@ -3,12 +3,14 @@ package com.habitloop.analytics.service;
 import com.habitloop.analytics.store.AnalyticsItem;
 import com.habitloop.analytics.store.AnalyticsKeys;
 import com.habitloop.analytics.store.AnalyticsStore;
+import com.habitloop.common.time.TimeZones;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
 import java.time.temporal.IsoFields;
 
 /**
@@ -34,8 +36,9 @@ public class AnalyticsIngestService {
             return;
         }
 
-        LocalDate date = occurredAt.toLocalDate();
-        String hour = String.format("%02d", occurredAt.getHour());
+        ZonedDateTime indiaOccurredAt = occurredAt.atZoneSameInstant(TimeZones.INDIA);
+        LocalDate date = indiaOccurredAt.toLocalDate();
+        String hour = String.format("%02d", indiaOccurredAt.getHour());
         String weekday = date.getDayOfWeek().name().substring(0, 3); // MON, TUE, ...
         String isoWeek = String.format("%d-W%02d",
                 date.get(IsoFields.WEEK_BASED_YEAR), date.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));

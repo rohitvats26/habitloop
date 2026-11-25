@@ -36,7 +36,7 @@ CREATE TABLE user_profiles (
     user_id      UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     tenant_id    UUID        NOT NULL,
     display_name VARCHAR(80),
-    timezone     VARCHAR(64) NOT NULL DEFAULT 'UTC',
+    timezone     VARCHAR(64) NOT NULL DEFAULT 'Asia/Kolkata',
     avatar_url   VARCHAR(512),
     updated_at   TIMESTAMPTZ NOT NULL
 );

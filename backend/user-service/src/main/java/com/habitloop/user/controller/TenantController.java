@@ -21,7 +21,7 @@ public class TenantController {
     }
 
     @GetMapping("/me")
-    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'USER')")
     @Operation(summary = "Get the current tenant details")
     public TenantResponse currentTenant() {
         return tenantService.getCurrentTenant();

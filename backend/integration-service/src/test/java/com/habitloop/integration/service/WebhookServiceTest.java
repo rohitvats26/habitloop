@@ -1,7 +1,7 @@
 package com.habitloop.integration.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.habitloop.common.exception.BusinessException;
+import com.habitloop.common.exception.InvalidRequestException;
 import com.habitloop.common.exception.UnauthorizedException;
 import com.habitloop.integration.dto.WebhookResponse;
 import com.habitloop.integration.entity.ConnectionStatus;
@@ -106,7 +106,78 @@ class WebhookServiceTest {
         String noId = "{\"type\":\"STEPS\"}";
 
         assertThatThrownBy(() -> service.ingest(connectionId, HmacSigner.hex(secret, noId), noId))
-                .isInstanceOf(BusinessException.class);
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void malformedJson_isBadRequest() {
+        stubConnection(ConnectionStatus.CONNECTED);
+        when(secretStore.resolve("ref")).thenReturn(secret);
+        String malformed = "{\"externalEventId\":";
+
+        assertThatThrownBy(() -> service.ingest(connectionId, HmacSigner.hex(secret, malformed), malformed))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("Malformed JSON payload");
+        verify(publisher, never()).publish(any());
+    }
+
+    @Test
+    void trailingContent_isRejectedAsMalformedJson() {
+        String malformed = "{\"externalEventId\":\"evt_1\"} trailing";
+        assertSignedPayloadRejected(malformed);
+    }
+
+    @Test
+    void nonStringExternalEventId_isBadRequest() {
+        String invalidId = "{\"externalEventId\":123}";
+        assertSignedPayloadRejected(invalidId);
+    }
+
+    @Test
+    void oversizedExternalEventId_isBadRequest() {
+        String invalidId = "{\"externalEventId\":\"" + "x".repeat(129) + "\"}";
+        assertSignedPayloadRejected(invalidId);
+    }
+
+    @Test
+    void invalidPartnerFields_areRejectedBeforePublishing() {
+        assertSignedPayloadRejected("{\"externalEventId\":\"evt\",\"type\":123}");
+        assertSignedPayloadRejected("{\"externalEventId\":\"evt\",\"unit\":\"" + "u".repeat(21) + "\"}");
+        assertSignedPayloadRejected("{\"externalEventId\":\"evt\",\"value\":\"many\"}");
+        assertSignedPayloadRejected("{\"externalEventId\":\"evt\",\"value\":-1}");
+        assertSignedPayloadRejected("{\"externalEventId\":\"evt\",\"occurredAt\":\"yesterday\"}");
+        assertSignedPayloadRejected("{\"externalEventId\":\"evt\",\"habitId\":\"not-a-uuid\"}");
+        String controlCharacterId = new ObjectMapper().createObjectNode()
+                .put("externalEventId", "evt" + (char) 0).toString();
+        assertSignedPayloadRejected(controlCharacterId);
+    }
+
+    @Test
+    void oversizedPayload_isRejectedBeforeConnectionLookup() {
+        String oversized = "x".repeat(256 * 1024 + 1);
+
+        assertThatThrownBy(() -> service.ingest(connectionId, "signature", oversized))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("Webhook payload must not exceed 256 KB");
+        verify(connections, never()).findById(connectionId);
+    }
+
+    @Test
+    void blankPayload_isRejectedBeforeConnectionLookup() {
+        assertThatThrownBy(() -> service.ingest(connectionId, "signature", "  "))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("Webhook payload is required");
+        verify(connections, never()).findById(connectionId);
+    }
+
+    private void assertSignedPayloadRejected(String invalidPayload) {
+        stubConnection(ConnectionStatus.CONNECTED);
+        when(secretStore.resolve("ref")).thenReturn(secret);
+
+        assertThatThrownBy(() -> service.ingest(connectionId, HmacSigner.hex(secret, invalidPayload), invalidPayload))
+                .isInstanceOf(InvalidRequestException.class);
+        verify(publisher, never()).publish(any());
+        verify(rawEvents, never()).save(any());
     }
 
     private void stubConnection(ConnectionStatus status) {
