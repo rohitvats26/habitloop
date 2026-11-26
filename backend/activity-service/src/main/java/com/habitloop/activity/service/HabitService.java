@@ -4,18 +4,23 @@ import com.habitloop.activity.dto.CompletionRequest;
 import com.habitloop.activity.dto.CompletionResponse;
 import com.habitloop.activity.dto.CreateHabitRequest;
 import com.habitloop.activity.dto.HabitResponse;
+import com.habitloop.activity.dto.HabitPauseRange;
 import com.habitloop.activity.dto.HabitScheduleRules;
+import com.habitloop.activity.dto.HabitWeeklyProgress;
+import com.habitloop.activity.dto.PauseHabitRequest;
 import com.habitloop.activity.dto.StreakDto;
 import com.habitloop.activity.dto.UpdateHabitRequest;
 import com.habitloop.activity.entity.ActivityLog;
 import com.habitloop.activity.entity.ActivitySource;
 import com.habitloop.activity.entity.Habit;
 import com.habitloop.activity.entity.HabitCompletion;
+import com.habitloop.activity.entity.HabitPausePeriod;
 import com.habitloop.activity.entity.HabitStreak;
 import com.habitloop.activity.event.ActivityLoggedEvent;
 import com.habitloop.activity.mapper.ActivityMapper;
 import com.habitloop.activity.repository.ActivityLogRepository;
 import com.habitloop.activity.repository.HabitCompletionRepository;
+import com.habitloop.activity.repository.HabitPausePeriodRepository;
 import com.habitloop.activity.repository.HabitRepository;
 import com.habitloop.activity.repository.HabitStreakRepository;
 import com.habitloop.common.exception.DuplicateResourceException;
@@ -32,6 +37,8 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.DayOfWeek;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -39,16 +46,19 @@ public class HabitService {
 
     private final HabitRepository habits;
     private final HabitCompletionRepository completions;
+    private final HabitPausePeriodRepository pausePeriods;
     private final HabitStreakRepository streaks;
     private final ActivityLogRepository activityLogs;
     private final ActivityMapper mapper;
     private final ApplicationEventPublisher events;
 
     public HabitService(HabitRepository habits, HabitCompletionRepository completions,
+                        HabitPausePeriodRepository pausePeriods,
                         HabitStreakRepository streaks, ActivityLogRepository activityLogs,
                         ActivityMapper mapper, ApplicationEventPublisher events) {
         this.habits = habits;
         this.completions = completions;
+        this.pausePeriods = pausePeriods;
         this.streaks = streaks;
         this.activityLogs = activityLogs;
         this.mapper = mapper;
@@ -72,20 +82,20 @@ public class HabitService {
         habit.setSchedule(mapper.writeSchedule(req.schedule()));
         habit.setTargetPerPeriod(req.targetPerPeriod());
         habit = habits.save(habit);
-        return mapper.toHabitResponse(habit, null);
+        return toResponse(habit, null);
     }
 
     @Transactional(readOnly = true)
     public PageResponse<HabitResponse> list(Pageable pageable) {
         var page = habits.findByUserIdAndTenantIdAndDeletedAtIsNull(userId(), tenantId(), pageable)
-                .map(h -> mapper.toHabitResponse(h, streaks.findByHabitId(h.getId()).orElse(null)));
+                .map(h -> toResponse(h, streaks.findByHabitId(h.getId()).orElse(null)));
         return PageResponse.of(page);
     }
 
     @Transactional(readOnly = true)
     public HabitResponse get(UUID habitId) {
         Habit habit = requireHabit(habitId);
-        return mapper.toHabitResponse(habit, streaks.findByHabitId(habitId).orElse(null));
+        return toResponse(habit, streaks.findByHabitId(habitId).orElse(null));
     }
 
     @Transactional
@@ -116,9 +126,52 @@ public class HabitService {
         }
         if (req.active() != null) {
             habit.setActive(req.active());
+            habit.setPausedUntil(null);
+            closePausePeriod(habit, LocalDate.now(TimeZones.INDIA));
         }
         habits.save(habit);
-        return mapper.toHabitResponse(habit, streaks.findByHabitId(habitId).orElse(null));
+        return toResponse(habit, streaks.findByHabitId(habitId).orElse(null));
+    }
+
+    @Transactional
+    public HabitResponse pause(UUID habitId, PauseHabitRequest request) {
+        Habit habit = requireHabit(habitId);
+        LocalDate today = LocalDate.now(TimeZones.INDIA);
+        habit.setActive(false);
+        LocalDate resumeDate = today.plusDays(request.days());
+        closePausePeriod(habit, today);
+        habit.setPausedUntil(resumeDate);
+        HabitPausePeriod pause = new HabitPausePeriod();
+        pause.setTenantId(habit.getTenantId());
+        pause.setUserId(habit.getUserId());
+        pause.setHabitId(habit.getId());
+        pause.setStartDate(today);
+        pause.setResumeDate(resumeDate);
+        pausePeriods.save(pause);
+        habits.save(habit);
+        return toResponse(habit, streaks.findByHabitId(habitId).orElse(null));
+    }
+
+    @Transactional
+    public HabitResponse resume(UUID habitId) {
+        Habit habit = requireHabit(habitId);
+        habit.setActive(true);
+        closePausePeriod(habit, LocalDate.now(TimeZones.INDIA));
+        habit.setPausedUntil(null);
+        habits.save(habit);
+        return toResponse(habit, streaks.findByHabitId(habitId).orElse(null));
+    }
+
+    @Transactional
+    public void resumeExpiredPauses() {
+        LocalDate today = LocalDate.now(TimeZones.INDIA);
+        for (Habit habit : habits.findByActiveFalseAndPausedUntilLessThanEqualAndDeletedAtIsNull(today)) {
+            habit.setActive(true);
+            habit.setPausedUntil(null);
+            pausePeriods.findFirstByHabitIdAndTenantIdAndResumedAtIsNullOrderByStartDateDesc(
+                            habit.getId(), habit.getTenantId())
+                    .ifPresent(pause -> pause.setResumedAt(OffsetDateTime.now(TimeZones.INDIA)));
+        }
     }
 
     @Transactional
@@ -126,6 +179,8 @@ public class HabitService {
         Habit habit = requireHabit(habitId);
         habit.setDeletedAt(OffsetDateTime.now());
         habit.setActive(false);
+        closePausePeriod(habit, LocalDate.now(TimeZones.INDIA));
+        habit.setPausedUntil(null);
         habits.save(habit);
     }
 
@@ -179,8 +234,17 @@ public class HabitService {
             s.setUserId(habit.getUserId());
             return s;
         });
+        List<HabitPauseRange> pauses = streak.getLastCompleted() == null
+                || !date.isAfter(streak.getLastCompleted()) ? List.of()
+                : pausePeriods.findByHabitIdAndTenantIdAndStartDateLessThanAndResumeDateGreaterThan(
+                                habit.getId(), habit.getTenantId(), date.plusDays(1),
+                                streak.getLastCompleted().plusDays(1))
+                        .stream()
+                        .map(pause -> new HabitPauseRange(pause.getStartDate(), pause.getResumeDate()))
+                        .toList();
         StreakCalculator.Result r = StreakCalculator.next(
-                streak.getCurrentStreak(), streak.getLongestStreak(), streak.getLastCompleted(), date);
+                streak.getCurrentStreak(), streak.getLongestStreak(), streak.getLastCompleted(), date,
+                mapper.readSchedule(habit.getSchedule()), pauses);
         streak.setCurrentStreak(r.current());
         streak.setLongestStreak(r.longest());
         streak.setLastCompleted(r.lastCompleted());
@@ -202,6 +266,37 @@ public class HabitService {
     private Habit requireHabit(UUID habitId) {
         return habits.findByIdAndUserIdAndTenantIdAndDeletedAtIsNull(habitId, userId(), tenantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Habit", habitId));
+    }
+
+    private HabitResponse toResponse(Habit habit, HabitStreak streak) {
+        LocalDate today = LocalDate.now(TimeZones.INDIA);
+        LocalDate weekStart = today.with(DayOfWeek.MONDAY);
+        int completed = completions.countByHabitIdAndTenantIdAndCompletionDateBetween(
+                habit.getId(), habit.getTenantId(), weekStart, today);
+        LocalDate createdOn = habit.getCreatedAt() == null
+                ? today
+                : habit.getCreatedAt().atZoneSameInstant(TimeZones.INDIA).toLocalDate();
+        var pauses = pausePeriods
+                .findByHabitIdAndTenantIdAndStartDateLessThanAndResumeDateGreaterThan(
+                        habit.getId(), habit.getTenantId(), today.plusDays(1), weekStart)
+                .stream()
+                .map(pause -> new HabitPauseRange(pause.getStartDate(), pause.getResumeDate()))
+                .toList();
+        HabitWeeklyProgress progress = HabitProgressCalculator.calculate(
+                habit.getFrequency(), mapper.readSchedule(habit.getSchedule()), habit.getTargetPerPeriod(),
+                createdOn, today, completed, habit.isActive(), pauses);
+        return mapper.toHabitResponse(habit, streak, progress);
+    }
+
+    private void closePausePeriod(Habit habit, LocalDate resumeDate) {
+        pausePeriods.findFirstByHabitIdAndTenantIdAndResumedAtIsNullOrderByStartDateDesc(
+                        habit.getId(), habit.getTenantId())
+                .ifPresent(pause -> {
+                    if (resumeDate.isBefore(pause.getResumeDate())) {
+                        pause.setResumeDate(resumeDate);
+                    }
+                    pause.setResumedAt(OffsetDateTime.now(TimeZones.INDIA));
+                });
     }
 
     private UUID tenantId() {

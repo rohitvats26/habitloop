@@ -7,9 +7,12 @@ import { browser } from '$app/environment';
 import { getToken, logout } from './auth.svelte';
 import type {
   ActivityQuery,
+  Achievement,
   CohortSummary,
+  Habit,
   PatternSummary,
   RecommendationResponse,
+  Page,
   TenantInfo,
   UserProfile,
   WeeklyStat
@@ -129,10 +132,13 @@ export const api = {
     me: () => call<TenantInfo>('user', '/api/tenants/me')
   },
   habits: {
-    list: () => call('activity', '/api/habits?size=100'),
+    list: (page = 0) => call<Page<Habit>>('activity', `/api/habits?size=100${page ? `&page=${page}` : ''}`),
     get: (id: string) => call('activity', `/api/habits/${id}`),
     create: (body: unknown) => call('activity', '/api/habits', { method: 'POST', body }),
     update: (id: string, body: unknown) => call('activity', `/api/habits/${id}`, { method: 'PUT', body }),
+    pause: (id: string, days = 7) =>
+      call('activity', `/api/habits/${id}/pause`, { method: 'POST', body: { days } }),
+    resume: (id: string) => call('activity', `/api/habits/${id}/resume`, { method: 'POST' }),
     remove: (id: string) => call('activity', `/api/habits/${id}`, { method: 'DELETE' }),
     complete: (id: string, body: unknown) =>
       call('activity', `/api/habits/${id}/completions`, { method: 'POST', body }),
@@ -162,6 +168,9 @@ export const api = {
     pending: () => call('challenge', '/api/invitations?size=100'),
     accept: (id: string) => call('challenge', `/api/invitations/${id}/accept`, { method: 'POST' }),
     reject: (id: string) => call('challenge', `/api/invitations/${id}/reject`, { method: 'POST' })
+  },
+  achievements: {
+    list: () => call<Page<Achievement>>('challenge', '/api/achievements?size=100')
   },
   integrations: {
     list: () => call('integration', '/api/integrations/connections'),

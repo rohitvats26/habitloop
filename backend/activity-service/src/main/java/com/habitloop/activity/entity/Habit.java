@@ -17,6 +17,7 @@ import org.hibernate.annotations.ParamDef;
 import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -69,6 +70,9 @@ public class Habit {
 
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
+
+    @Column(name = "paused_until")
+    private LocalDate pausedUntil;
 
     @PrePersist
     void onCreate() {
@@ -168,5 +172,13 @@ public class Habit {
 
     public void setDeletedAt(OffsetDateTime deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    public LocalDate getPausedUntil() {
+        return pausedUntil;
+    }
+
+    public void setPausedUntil(LocalDate pausedUntil) {
+        this.pausedUntil = pausedUntil;
     }
 }

@@ -13,4 +13,7 @@ public interface HabitCompletionRepository extends JpaRepository<HabitCompletion
     boolean existsByHabitIdAndCompletionDate(UUID habitId, LocalDate completionDate);
 
     Page<HabitCompletion> findByHabitIdAndTenantId(UUID habitId, UUID tenantId, Pageable pageable);
+
+    int countByHabitIdAndTenantIdAndCompletionDateBetween(UUID habitId, UUID tenantId,
+                                                           LocalDate from, LocalDate to);
 }

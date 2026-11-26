@@ -4,6 +4,7 @@ import com.habitloop.challenge.dto.ChallengeSummary;
 import com.habitloop.challenge.dto.CreateChallengeRequest;
 import com.habitloop.challenge.entity.Challenge;
 import com.habitloop.challenge.entity.ChallengeParticipant;
+import com.habitloop.challenge.entity.ChallengeStatus;
 import com.habitloop.challenge.entity.Visibility;
 import com.habitloop.challenge.mapper.ChallengeMapper;
 import com.habitloop.challenge.repository.ChallengeParticipantRepository;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -32,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +43,7 @@ class ChallengeServiceTest {
 
     @Mock ChallengeRepository challenges;
     @Mock ChallengeParticipantRepository participants;
+    @Mock AchievementService achievements;
 
     ChallengeService service;
 
@@ -48,7 +53,7 @@ class ChallengeServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ChallengeService(challenges, participants, new ChallengeMapper());
+        service = new ChallengeService(challenges, participants, new ChallengeMapper(), achievements);
         var principal = new AuthUser(userId.toString(), tenantId.toString(), List.of("USER"));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, List.of()));
@@ -76,7 +81,28 @@ class ChallengeServiceTest {
 
         assertThat(res.id()).isEqualTo(challengeId.toString());
         assertThat(res.visibility()).isEqualTo(Visibility.PUBLIC);
+        assertThat(res.joined()).isTrue();
         verify(participants).save(any(ChallengeParticipant.class)); // creator auto-joined
+        verify(achievements).awardChallengeParticipation(tenantId, userId, challengeId);
+    }
+
+    @Test
+    void feed_marksOnlyCurrentUsersMemberships() {
+        UUID otherId = UUID.randomUUID();
+        Challenge joined = challenge(Visibility.PUBLIC);
+        Challenge available = challenge(Visibility.PUBLIC);
+        available.setId(otherId);
+        var pageable = PageRequest.of(0, 10);
+        when(challenges.feed(tenantId, userId, Visibility.PUBLIC, pageable))
+                .thenReturn(new PageImpl<>(List.of(joined, available), pageable, 2));
+        ChallengeParticipant membership = new ChallengeParticipant();
+        membership.setChallengeId(challengeId);
+        when(participants.findByTenantIdAndUserIdAndChallengeIdIn(tenantId, userId, List.of(challengeId, otherId)))
+                .thenReturn(List.of(membership));
+
+        var feed = service.feed(pageable);
+
+        assertThat(feed.content()).extracting(ChallengeSummary::joined).containsExactly(true, false);
     }
 
     @Test
@@ -91,6 +117,25 @@ class ChallengeServiceTest {
         Challenge c = challenge(Visibility.PRIVATE);
         when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId)).thenReturn(Optional.of(c));
         assertThatThrownBy(() -> service.join(challengeId)).isInstanceOf(CrossTenantAccessException.class);
+    }
+
+    @Test
+    void endedChallengeIsShownAsEndedAndCannotBeJoined() {
+        Challenge c = challenge(Visibility.PUBLIC);
+        c.setEndsOn(LocalDate.now(TimeZones.INDIA).minusDays(1));
+        when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId)).thenReturn(Optional.of(c));
+        assertThat(new ChallengeMapper().toSummary(c, false).status()).isEqualTo(ChallengeStatus.ENDED);
+        assertThatThrownBy(() -> service.join(challengeId))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("not open");
+        verify(participants, never()).save(any(ChallengeParticipant.class));
+    }
+
+    @Test
+    void challengeIsStillOpenOnItsEndDate() {
+        Challenge c = challenge(Visibility.PUBLIC);
+        c.setEndsOn(LocalDate.now(TimeZones.INDIA));
+        assertThat(new ChallengeMapper().toSummary(c, false).status()).isEqualTo(ChallengeStatus.ACTIVE);
+        service.requireOpen(c);
     }
 
     @Test

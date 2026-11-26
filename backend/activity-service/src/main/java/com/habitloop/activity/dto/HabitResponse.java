@@ -2,6 +2,7 @@ package com.habitloop.activity.dto;
 
 import com.habitloop.activity.entity.Frequency;
 
+import java.time.LocalDate;
 import java.util.Map;
 
 public record HabitResponse(
@@ -12,6 +13,8 @@ public record HabitResponse(
         Map<String, Object> schedule,
         int targetPerPeriod,
         boolean active,
-        StreakDto streak
+        StreakDto streak,
+        LocalDate pausedUntil,
+        HabitWeeklyProgress weeklyProgress
 ) {
 }

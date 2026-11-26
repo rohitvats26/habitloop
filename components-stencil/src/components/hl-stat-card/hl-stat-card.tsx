@@ -7,13 +7,15 @@ import { Component, Prop, h } from '@stencil/core';
   styles: `
     :host { display: block; }
     .card {
-      background: var(--surface, #fff); border: 1px solid var(--border, #e3e7ef);
-      border-radius: var(--radius, 12px); padding: 1rem 1.1rem;
+      position: relative; overflow: hidden; min-height: 112px; padding: 1rem 1.1rem;
+      border: 1px solid var(--border,#dce8e7); border-radius: var(--radius,20px);
+      background: linear-gradient(145deg,color-mix(in srgb,var(--primary,#087f75) 5%,var(--surface,#fff)),var(--surface,#fff) 68%);
       transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
     }
-    .card:hover { border-color: color-mix(in srgb, var(--primary,#5b5bd6) 32%, var(--border,#e3e7ef)); box-shadow: 0 10px 24px rgba(27,35,67,.08); transform: translateY(-1px); }
-    .k { color: var(--text-muted, #5b6474); font: 600 0.78rem var(--font, system-ui); letter-spacing: .015em; }
-    .v { margin-top: .2rem; font: 750 clamp(1.6rem, 3vw, 2rem) var(--font, system-ui); color: var(--text, #1a1d29); letter-spacing: -.035em; }
+    .card::after { position: absolute; top: -26px; right: -24px; width: 92px; height: 92px; border: 1px solid color-mix(in srgb,var(--primary,#087f75) 12%,transparent); border-radius: 50%; box-shadow: 0 0 0 12px color-mix(in srgb,var(--primary,#087f75) 3%,transparent),0 0 0 24px color-mix(in srgb,var(--primary,#087f75) 2%,transparent); content: ''; pointer-events: none; }
+    .card:hover { border-color: color-mix(in srgb,var(--primary,#087f75) 32%,var(--border,#dce8e7)); box-shadow: 0 12px 28px color-mix(in srgb,var(--primary,#087f75) 9%,transparent); transform: translateY(-2px); }
+    .k { position: relative; z-index: 1; color: var(--text-muted,#617574); font: 650 .77rem var(--font,system-ui); letter-spacing: .015em; }
+    .v { position: relative; z-index: 1; margin-top: .45rem; color: var(--text,#172b2b); font: 750 clamp(1.8rem,3vw,2.2rem)/1.1 var(--font,system-ui); letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
     @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
   `
 })

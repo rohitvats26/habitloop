@@ -50,6 +50,7 @@ public class InvitationService {
         if (!c.getCreatorId().equals(userId())) {
             throw new CrossTenantAccessException("Only the challenge creator can invite");
         }
+        challengeService.requireOpen(c);
         if (inviteeId.equals(userId())) {
             throw new BusinessException("Cannot invite yourself");
         }
@@ -82,13 +83,17 @@ public class InvitationService {
     @Transactional
     public InvitationResponse accept(UUID invitationId) {
         ChallengeInvitation inv = requirePendingForMe(invitationId);
+        Challenge c = challenges.findByIdAndTenantIdAndDeletedAtIsNull(inv.getChallengeId(), tenantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Challenge", inv.getChallengeId()));
+        boolean alreadyJoined = participants.existsByChallengeIdAndUserId(c.getId(), userId());
+        if (!alreadyJoined) {
+            challengeService.requireOpen(c);
+        }
         inv.setStatus(InvitationStatus.ACCEPTED);
         inv.setRespondedAt(OffsetDateTime.now());
         invitations.save(inv);
 
-        Challenge c = challenges.findByIdAndTenantIdAndDeletedAtIsNull(inv.getChallengeId(), tenantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Challenge", inv.getChallengeId()));
-        if (!participants.existsByChallengeIdAndUserId(c.getId(), userId())) {
+        if (!alreadyJoined) {
             challengeService.addParticipant(c, userId());
         }
         return mapper.toInvitationResponse(inv);

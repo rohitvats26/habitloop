@@ -49,7 +49,7 @@ Every event (internal and the normalized external one) uses one envelope, define
 
 | Topic | Producer | Consumers | Key |
 |-------|----------|-----------|-----|
-| `user.registered` | user-service | (future: notifications) | tenantId |
+| `user.registered` | user-service | — | tenantId |
 | `activity.logged` | activity-service | challenge-service, analytics-service | tenantId:userId |
 | `challenge.joined` / `challenge.completed` | challenge-service | analytics-service | tenantId:challengeId |
 | `analytics.updated` | analytics-service | recommendation-service (cache-bust) | tenantId:userId |

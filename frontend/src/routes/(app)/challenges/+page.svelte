@@ -85,7 +85,7 @@
   <div class="grid feed">
     {#if filteredFeed.length}
       {#each filteredFeed as c (c.id)}
-        <div class="card ch">
+        <article class="card ch">
           <div class="head">
             <a href={`/challenges/${c.id}`}><strong>{c.title}</strong></a>
             <span class="badge">{c.visibility}</span>
@@ -95,13 +95,17 @@
           <div class="meta muted">Target {c.target} · {c.startsOn} → {c.endsOn}</div>
           <div class="ops">
             <a class="btn" href={`/challenges/${c.id}`}>View</a>
-            {#if c.visibility === 'PUBLIC'}
+            {#if c.joined}
+              <span class="badge">Joined</span>
+            {:else if c.status === 'ENDED'}
+              <span class="badge">Joining closed</span>
+            {:else if c.visibility === 'PUBLIC' && c.status === 'ACTIVE'}
               <button class="btn btn-primary" onclick={() => join(c.id)} disabled={joiningIds.includes(c.id)}>
                 {joiningIds.includes(c.id) ? 'Joining…' : 'Join'}
               </button>
             {/if}
           </div>
-        </div>
+        </article>
       {/each}
     {:else if !feed.length}
       <div class="empty-state">
@@ -122,7 +126,11 @@
   .filters .grow { flex: 1; }
   .feed { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
   .head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
-  .ch { display: flex; flex-direction: column; align-items: flex-start; }
-  .meta { margin: 0.4rem 0 0.6rem; font-size: 0.85rem; }
-  .ops { display: flex; gap: 0.5rem; }
+  .ch { position: relative; display: flex; min-height: 220px; flex-direction: column; align-items: flex-start; gap: .5rem; }
+  .head { width: 100%; }
+  .head a { flex: 1; min-width: 160px; color: var(--text); font-size: 1rem; }
+  .head a:hover { color: var(--primary); }
+  .ch > p { margin: .25rem 0; }
+  .meta { margin: auto 0 .45rem; color: var(--text-muted); font-size: .8rem; }
+  .ops { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: auto; }
 </style>

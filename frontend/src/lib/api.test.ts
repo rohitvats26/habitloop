@@ -37,6 +37,37 @@ describe('API errors', () => {
   });
 
   describe('analytics and activity query APIs', () => {
+    it('can request later habit pages without changing the default URL', async () => {
+      const fetchMock = vi.fn().mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ content: [], totalPages: 0 }), { status: 200 }))
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      await api.habits.list();
+      await api.habits.list(1);
+      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+        'http://localhost:8082/api/habits?size=100',
+        'http://localhost:8082/api/habits?size=100&page=1'
+      ]);
+    });
+
+    it('routes schedule and achievement APIs to their owning services', async () => {
+      const fetchMock = vi.fn().mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }))
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      await api.habits.pause('habit-id', 7);
+      await api.achievements.list();
+
+      expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method ?? 'GET'])).toEqual([
+        ['http://localhost:8082/api/habits/habit-id/pause', 'POST'],
+        ['http://localhost:8083/api/achievements?size=100', 'GET']
+      ]);
+    });
+
     it('encodes activity filters and pagination as query parameters', async () => {
       const fetchMock = vi.fn().mockImplementation(() =>
         Promise.resolve(new Response(JSON.stringify({ content: [] }), {

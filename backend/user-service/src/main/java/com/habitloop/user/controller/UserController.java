@@ -28,12 +28,14 @@ public class UserController {
     }
 
     @GetMapping("/me")
+    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'USER')")
     @Operation(summary = "Get the current user's profile")
     public UserResponse me() {
         return userService.getCurrentUser();
     }
 
     @PutMapping("/me")
+    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'USER')")
     @Operation(summary = "Update the current user's profile")
     public UserResponse updateMe(@Valid @RequestBody UpdateProfileRequest request) {
         return userService.updateCurrentProfile(request);

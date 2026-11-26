@@ -95,7 +95,7 @@ it publishes **`analytics.updated`**. The dashboard renders with Stencil compone
 { "generatedAt": "2026-11-24T10:00:00Z", "items": [
   { "type": "TIMING", "habitId": "4d2e...", "title": "Run earlier",
     "message": "You complete 'Morning run' most on days you start before 7:30am.",
-    "action": { "label": "Set reminder 07:00", "suggestedTime": "07:00" }, "confidence": 0.82 } ] }
+    "action": { "label": "Set target time 07:00", "suggestedTime": "07:00" }, "confidence": 0.82 } ] }
 ```
 **Behind the scenes (recommendation-service):** it consumed **`analytics.updated`**, read the user's
 patterns from analytics (via `AnalyticsClient`, Resilience4j circuit-breaker protected), and ran its
@@ -104,12 +104,12 @@ heuristics (TIMING / FREQUENCY / CONSISTENCY). Results are cached briefly (5 min
 analytics-driven.
 
 ## Step 7 — Accept a personalized timing recommendation
-**UI:** Ria clicks **"Set reminder 07:00"** on the `hl-recommendation-card`.
+**UI:** Ria clicks **"Set target time 07:00"** on the `hl-recommendation-card`.
 **API:** the accept action applies the suggestion to the habit —
 `PUT {activityBase}/api/habits/{habitId}` with the suggested `targetTime: "07:00"` (a FREQUENCY
 recommendation would instead set `perWeek`).
-**Result:** the habit's schedule updates, a fresh `activity.logged`-style change propagates, and the next
-analytics/recommendation cycle reflects the accepted change. Ria sees a toast confirming the update.
+**Result:** the habit's target time is updated and Ria sees a toast confirming the change. Setting a
+target time does not send a reminder.
 
 ## Other product workflows
 - **Habits:** open recent completion history from each habit card; dates are displayed in IST.

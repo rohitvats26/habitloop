@@ -39,8 +39,8 @@ public final class RecommendationEngine {
         String time = peak.getKey() + ":00";
         return java.util.Optional.of(new RecommendationItem(
                 "TIMING", habitId, "Lock in your best time",
-                "You complete most activities around " + time + ". A reminder then should help.",
-                Map.of("label", "Set reminder " + time, "suggestedTime", time),
+                "You complete most activities around " + time + ". Consider setting this as your target time.",
+                Map.of("label", "Set target time " + time, "suggestedTime", time),
                 round2(confidence)));
     }
 

@@ -9,7 +9,7 @@
   let title = $state('');
   let description = $state('');
   let visibility = $state('PUBLIC');
-  let metric = $state('DAYS_COMPLETED');
+  const metric = 'DAYS_COMPLETED';
   let target = $state(30);
   let startsOn = $state('');
   let endsOn = $state('');
@@ -65,9 +65,11 @@
     <div class="field"><label class="label" for="visibility">Visibility</label>
       <select class="input" id="visibility" bind:value={visibility}><option>PUBLIC</option><option>PRIVATE</option></select>
     </div>
-    <div class="field"><label class="label" for="metric">Metric</label><input class="input" id="metric" bind:value={metric} maxlength="40" required /></div>
-    <div class="field"><label class="label" for="target">Target</label><input class="input" id="target" type="number" min="0.01" max="9999999999.99" step="0.01" bind:value={target} required /></div>
+    <div class="field"><label class="label" for="target">Target activity count</label><input class="input" id="target" type="number" min="1" max="9999999999" step="1" bind:value={target} required />
+      <span class="field-hint">Each recorded activity counts once; multiple activities can count on the same day.</span>
+    </div>
   </div>
+  <p class="field-hint">The target is how many activities each participant aims to record. The end date is the last day activities count, even if the target has not been reached. Both dates are inclusive.</p>
   <div class="row">
     <div class="field"><label class="label" for="startsOn">Starts</label><input class="input" id="startsOn" type="date" bind:value={startsOn} required /></div>
     <div class="field"><label class="label" for="endsOn">Ends</label><input class="input" id="endsOn" type="date" bind:value={endsOn} min={startsOn} required /></div>
@@ -83,8 +85,11 @@
 </form>
 
 <style>
-  .challenge-form { max-width: 860px; }
+  .challenge-form { max-width: 860px; border-top: 3px solid color-mix(in srgb,var(--primary) 55%,transparent); }
   .challenge-form > p:first-of-type { margin: -.1rem 0 1.25rem; }
   .challenge-form .row > .field { flex: 1; min-width: 180px; }
   .date-note { display: flex; align-items: center; gap: .55rem; margin: .25rem 0 1rem; font-size: .82rem; }
+  .challenge-form h2 { font-size: 1.25rem; }
+  .challenge-form textarea { min-height: 100px; }
+  @media (max-width: 560px) { .challenge-form .btn { width: 100%; justify-content: center; } }
 </style>

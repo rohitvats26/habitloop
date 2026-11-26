@@ -66,20 +66,27 @@
   <LoadingState message="Loading challenge details…" />
 {:else if c}
   <div class="row two">
-    <div class="card grow">
+    <div class="grow">
       <hl-challenge-card
         challenge-title={c.title}
         visibility={c.visibility}
         progress={c.myProgress ?? 0}
         target={c.target}
       ></hl-challenge-card>
-      <div class="head"><span class="badge">{c.status}</span></div>
-      {#if c.description}<p>{c.description}</p>{/if}
-      <p class="muted">Target {c.target} · {c.startsOn} → {c.endsOn}</p>
-      <div class="progress">
-        <div>
-          <strong>Your progress: {c.myProgress ?? 0}/{c.target}</strong>
-          <div class="muted">{c.completed ? 'Completed 🎉' : 'In progress'}</div>
+      <div class="card challenge-details">
+        <div class="head"><span class="badge">{c.status}</span></div>
+        {#if c.description}<p>{c.description}</p>{/if}
+        <p class="muted">Target {c.target} · {c.startsOn} → {c.endsOn}</p>
+        <div class="progress">
+          <div>
+            {#if c.myProgress == null}
+              <strong>Not joined</strong>
+              <div class="muted">Join this challenge to track your progress.</div>
+            {:else}
+              <strong>Your progress: {c.myProgress}/{c.target}</strong>
+              <div class="muted">{c.completed ? 'Completed 🎉' : 'In progress'}</div>
+            {/if}
+          </div>
         </div>
       </div>
     </div>
@@ -99,7 +106,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <section class="card leaderboard">
     <h2>Leaderboard</h2>
     {#if c.leaderboard.length}
       <table>
@@ -113,9 +120,9 @@
     {:else}
       <div class="empty-state compact">
         <div class="empty-state-copy"><strong>You're first on the board</strong><p>Invite teammates to start building the leaderboard.</p></div>
-      </div>
+    </div>
     {/if}
-  </div>
+  </section>
 {/if}
 
 <style>
@@ -124,4 +131,10 @@
   .head { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
   .progress { display: flex; align-items: center; gap: 0.8rem; margin-top: 0.75rem; }
   .card { overflow-x: auto; }
+  .challenge-details { margin-top: .75rem; }
+  .challenge-details p { margin: .55rem 0; }
+  .progress strong { color: var(--primary); font-size: 1.05rem; }
+  .leaderboard { margin-top: .5rem; }
+  .leaderboard table { min-width: 440px; }
+  .leaderboard td:first-child { color: var(--primary); font-weight: 750; }
 </style>

@@ -130,7 +130,7 @@ normalization code (AS-13), so the same end-to-end flow is demonstrable without 
 
 Activity Summary Card · Habit Card · Challenge Card · Partner Connection Tile · Progress Indicator
 (Stencil `<hl-progress-ring>`) · Chart Widget (Stencil `<hl-chart>`) · Recommendation Card · Nav + Sidebar ·
-Notification/Toast. Stencil components expose typed props and emit DOM `CustomEvent`s, so SvelteKit
+Toast. Stencil components expose typed props and emit DOM `CustomEvent`s, so SvelteKit
 binds to them with `on:` handlers after importing the generated loader.
 
 ---

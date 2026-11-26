@@ -125,9 +125,12 @@
 
 <style>
   .card { overflow-x: auto; }
-  .filters { display: flex; align-items: end; flex-wrap: wrap; gap: 1rem; margin-bottom: .75rem; }
+  .filters { display: flex; align-items: end; flex-wrap: wrap; gap: 1rem; margin-bottom: .75rem; border-top: 3px solid color-mix(in srgb,var(--primary) 45%,transparent); }
   .filters .field { min-width: 160px; flex: 1; }
   .filter-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
   .result-count { margin: 0 0 .75rem; font-size: .85rem; }
-  .pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; }
+  .pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; padding: .75rem; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in srgb,var(--surface-2) 40%,var(--surface)); }
+  .pagination span { font-size: .82rem; font-variant-numeric: tabular-nums; }
+  table { min-width: 620px; }
+  @media (max-width: 560px) { .filter-actions { width: 100%; } .filter-actions .btn { flex: 1 1 40%; justify-content: center; } }
 </style>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasApplicableRecommendation, recommendationUpdate } from './recommendations';
+import { eligibleRecommendationHabits, hasApplicableRecommendation, isRecommendationApplied, recommendationUpdate, recommendationsForCategory } from './recommendations';
 import type { Habit, Recommendation } from './types';
 
 const habit: Habit = {
@@ -9,6 +9,7 @@ const habit: Habit = {
   schedule: { daysOfWeek: [1, 3, 5], targetTime: '07:00', perWeek: 3 },
   targetPerPeriod: 3,
   active: true,
+  weeklyProgress: { completed: 1, expected: 2, consistencyPercent: 50 },
   streak: { current: 2, longest: 5 }
 };
 
@@ -29,6 +30,28 @@ describe('recommendation actions', () => {
     });
   });
 
+  describe('recommendation categories', () => {
+    const recommendations = [
+      recommendation({ suggestedTime: '08:00' }),
+      { ...recommendation({ suggestedPerWeek: 4 }), type: 'FREQUENCY' },
+      { ...recommendation({ suggestedWeekday: 'MON' }), type: 'CONSISTENCY' }
+    ];
+
+    it('returns all suggestions or only the selected focus', () => {
+      expect(recommendationsForCategory(recommendations, 'ALL')).toHaveLength(3);
+      expect(recommendationsForCategory(recommendations, 'FREQUENCY').map((item) => item.title))
+        .toEqual(['Try a new time']);
+    });
+
+    it('matches categories case-insensitively and returns no items for an empty category', () => {
+      const mixedCase = [{ ...recommendations[0], type: 'timing' }];
+      expect(recommendationsForCategory(mixedCase, 'TIMING')).toEqual(mixedCase);
+      expect(recommendationsForCategory(recommendations, 'CONSISTENCY')).toHaveLength(1);
+      expect(recommendationsForCategory(recommendations, 'TIMING')).toHaveLength(1);
+      expect(recommendationsForCategory(recommendations.slice(1), 'TIMING')).toEqual([]);
+    });
+  });
+
   it('applies a weekly target to a selected habit', () => {
     expect(recommendationUpdate(recommendation({ suggestedPerWeek: 4 }), habit)).toEqual({
       frequency: 'WEEKLY',
@@ -46,5 +69,26 @@ describe('recommendation actions', () => {
   it('does not offer invalid time or weekly target values', () => {
     expect(hasApplicableRecommendation(recommendation({ suggestedTime: '25:00' }))).toBe(false);
     expect(hasApplicableRecommendation(recommendation({ suggestedPerWeek: 8 }))).toBe(false);
+  });
+
+  it('recognizes applied timing and allows a different suggested time', () => {
+    expect(isRecommendationApplied(recommendation({ suggestedTime: '07:00' }), habit)).toBe(true);
+    expect(isRecommendationApplied(recommendation({ suggestedTime: '08:00' }), habit)).toBe(false);
+  });
+
+  it('recognizes weekly targets only when the full recommended schedule is applied', () => {
+    const weekly = { ...habit, frequency: 'WEEKLY' as const, schedule: { perWeek: 3 }, targetPerPeriod: 3 };
+    const r = recommendation({ suggestedPerWeek: 3 });
+    expect(isRecommendationApplied(r, weekly)).toBe(true);
+    expect(isRecommendationApplied(r, habit)).toBe(false);
+    expect(isRecommendationApplied(r, { ...weekly, targetPerPeriod: 2 })).toBe(false);
+  });
+
+  it('limits habit-specific recommendations to their active habit', () => {
+    const other = { ...habit, id: 'habit-2' };
+    const r = { ...recommendation({ suggestedTime: '08:00' }), habitId: habit.id };
+    expect(eligibleRecommendationHabits(r, [habit, other])).toEqual([habit]);
+    expect(eligibleRecommendationHabits(r, [{ ...habit, active: false }, other])).toEqual([]);
+    expect(eligibleRecommendationHabits(recommendation({ suggestedTime: '08:00' }), [habit, other])).toHaveLength(2);
   });
 });

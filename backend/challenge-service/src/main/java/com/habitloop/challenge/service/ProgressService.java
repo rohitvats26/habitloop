@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,22 +34,26 @@ public class ProgressService {
     private final ChallengeParticipantRepository participants;
     private final ChallengeRepository challenges;
     private final ChallengeProgressEventRepository progressEvents;
+    private final AchievementService achievements;
 
     public ProgressService(ChallengeParticipantRepository participants, ChallengeRepository challenges,
-                           ChallengeProgressEventRepository progressEvents) {
+                           ChallengeProgressEventRepository progressEvents, AchievementService achievements) {
         this.participants = participants;
         this.challenges = challenges;
         this.progressEvents = progressEvents;
+        this.achievements = achievements;
     }
 
     @Transactional
-    public void applyActivity(UUID tenantId, UUID userId, UUID activityLogId) {
+    public void applyActivity(UUID tenantId, UUID userId, UUID activityLogId, OffsetDateTime occurredAt) {
         List<ChallengeParticipant> parts = participants.findByTenantIdAndUserId(tenantId, userId);
-        LocalDate today = LocalDate.now(TimeZones.INDIA);
+        LocalDate activityDate = occurredAt.atZoneSameInstant(TimeZones.INDIA).toLocalDate();
         for (ChallengeParticipant p : parts) {
             Challenge c = challenges.findByIdAndTenantIdAndDeletedAtIsNull(p.getChallengeId(), tenantId)
                     .orElse(null);
-            if (c == null || c.getStatus() != ChallengeStatus.ACTIVE || !c.isWithinWindow(today)) {
+            LocalDate joinedDate = p.getJoinedAt().atZoneSameInstant(TimeZones.INDIA).toLocalDate();
+            if (c == null || c.getStatus() != ChallengeStatus.ACTIVE || !c.isWithinWindow(activityDate)
+                    || activityDate.isBefore(joinedDate)) {
                 continue;
             }
             if (progressEvents.existsByParticipantIdAndActivityLogId(p.getId(), activityLogId)) {
@@ -64,8 +69,10 @@ public class ProgressService {
                 continue; // concurrent delivery already counted it
             }
             p.setProgress(p.getProgress().add(BigDecimal.ONE));
-            if (p.getProgress().compareTo(c.getTarget()) >= 0) {
+            boolean newlyCompleted = !p.isCompleted() && p.getProgress().compareTo(c.getTarget()) >= 0;
+            if (newlyCompleted) {
                 p.setCompleted(true);
+                achievements.awardChallengeCompletion(tenantId, userId, c.getId());
             }
             participants.save(p);
             log.debug("Applied activity {} to participant {} (progress {})",

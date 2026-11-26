@@ -156,8 +156,8 @@
   <LoadingState message="Loading your analytics…" />
 {:else}
 <div class="grid tiles">
-  <div class="card tile"><div class="k">Completed today</div><div class="v">{summary?.completedToday ?? 0}</div></div>
-  <div class="card tile"><div class="k">This week</div><div class="v">{summary?.weekCompletions ?? 0}</div></div>
+  <hl-stat-card label="Completed today" value={summary?.completedToday ?? 0}></hl-stat-card>
+  <hl-stat-card label="This week" value={summary?.weekCompletions ?? 0}></hl-stat-card>
 </div>
 {/if}
 
@@ -255,8 +255,6 @@
 
 <style>
   .tiles { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1rem; }
-  .tile .k { color: var(--text-muted); font-size: 0.85rem; }
-  .tile .v { font-size: 2rem; font-weight: 700; }
   .card { overflow-x: auto; margin-bottom: 1rem; }
   .filters { display: flex; align-items: end; flex-wrap: wrap; gap: .75rem; }
   .filters .field { min-width: 150px; flex: 1; margin: 0; }

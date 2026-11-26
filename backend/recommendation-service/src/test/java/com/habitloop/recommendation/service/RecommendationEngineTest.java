@@ -28,6 +28,7 @@ class RecommendationEngineTest {
 
         RecommendationItem timing = items.stream().filter(i -> i.type().equals("TIMING")).findFirst().orElseThrow();
         assertThat(timing.action()).containsEntry("suggestedTime", "18:00"); // peak hour
+        assertThat(timing.action()).containsEntry("label", "Set target time 18:00");
 
         RecommendationItem freq = items.stream().filter(i -> i.type().equals("FREQUENCY")).findFirst().orElseThrow();
         assertThat(freq.action()).containsEntry("suggestedPerWeek", 4); // round(avg of 3,5)

@@ -5,6 +5,7 @@ import com.habitloop.activity.dto.CompletionRequest;
 import com.habitloop.activity.dto.CompletionResponse;
 import com.habitloop.activity.dto.CreateHabitRequest;
 import com.habitloop.activity.dto.HabitResponse;
+import com.habitloop.activity.dto.PauseHabitRequest;
 import com.habitloop.activity.entity.ActivityLog;
 import com.habitloop.activity.entity.Frequency;
 import com.habitloop.activity.entity.Habit;
@@ -14,6 +15,7 @@ import com.habitloop.activity.event.ActivityLoggedEvent;
 import com.habitloop.activity.mapper.ActivityMapper;
 import com.habitloop.activity.repository.ActivityLogRepository;
 import com.habitloop.activity.repository.HabitCompletionRepository;
+import com.habitloop.activity.repository.HabitPausePeriodRepository;
 import com.habitloop.activity.repository.HabitRepository;
 import com.habitloop.activity.repository.HabitStreakRepository;
 import com.habitloop.common.exception.DuplicateResourceException;
@@ -50,6 +52,7 @@ class HabitServiceTest {
 
     @Mock HabitRepository habits;
     @Mock HabitCompletionRepository completions;
+    @Mock HabitPausePeriodRepository pausePeriods;
     @Mock HabitStreakRepository streaks;
     @Mock ActivityLogRepository activityLogs;
     @Mock ApplicationEventPublisher events;
@@ -62,7 +65,7 @@ class HabitServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new HabitService(habits, completions, streaks, activityLogs,
+        service = new HabitService(habits, completions, pausePeriods, streaks, activityLogs,
                 new ActivityMapper(new ObjectMapper()), events);
         var principal = new AuthUser(userId.toString(), tenantId.toString(), List.of("USER"));
         SecurityContextHolder.getContext().setAuthentication(
@@ -168,6 +171,23 @@ class HabitServiceTest {
         when(habits.findByIdAndUserIdAndTenantIdAndDeletedAtIsNull(other, userId, tenantId))
                 .thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.get(other)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void pauseAndResumeHabitUseTemporaryIstPauseDate() {
+        Habit habit = habit();
+        when(habits.findByIdAndUserIdAndTenantIdAndDeletedAtIsNull(habitId, userId, tenantId))
+                .thenReturn(Optional.of(habit));
+
+        HabitResponse paused = service.pause(habitId, new PauseHabitRequest(7));
+
+        assertThat(paused.active()).isFalse();
+        assertThat(paused.pausedUntil()).isEqualTo(LocalDate.now(TimeZones.INDIA).plusDays(7));
+
+        HabitResponse resumed = service.resume(habitId);
+
+        assertThat(resumed.active()).isTrue();
+        assertThat(resumed.pausedUntil()).isNull();
     }
 
     private Habit habit() {

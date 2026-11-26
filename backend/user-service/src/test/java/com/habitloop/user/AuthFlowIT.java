@@ -4,6 +4,7 @@ import com.habitloop.user.dto.AuthResponse;
 import com.habitloop.user.dto.LoginRequest;
 import com.habitloop.user.dto.RegisterRequest;
 import com.habitloop.user.dto.TenantResponse;
+import com.habitloop.user.dto.UpdateProfileRequest;
 import com.habitloop.user.dto.UserResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,6 +90,24 @@ class AuthFlowIT {
                 org.springframework.http.HttpMethod.GET, new HttpEntity<>(memberHeaders), TenantResponse.class);
         assertThat(memberTenant.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(memberTenant.getBody().joinCode()).isEqualTo(adminTenant.getBody().joinCode());
+
+        ResponseEntity<UserResponse> memberProfile = rest.exchange("/api/users/me",
+                org.springframework.http.HttpMethod.GET, new HttpEntity<>(memberHeaders), UserResponse.class);
+        assertThat(memberProfile.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(memberProfile.getBody().email()).isEqualTo("member@acme.com");
+        assertThat(memberProfile.getBody().roles()).contains("USER");
+
+        ResponseEntity<UserResponse> updatedMemberProfile = rest.exchange("/api/users/me",
+                org.springframework.http.HttpMethod.PUT,
+                new HttpEntity<>(new UpdateProfileRequest("Updated Member", "Asia/Kolkata", null), memberHeaders),
+                UserResponse.class);
+        assertThat(updatedMemberProfile.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(updatedMemberProfile.getBody().displayName()).isEqualTo("Updated Member");
+
+        ResponseEntity<String> memberCannotReadAnotherProfile = rest.exchange(
+                "/api/users/" + reg.getBody().id(), org.springframework.http.HttpMethod.GET,
+                new HttpEntity<>(memberHeaders), String.class);
+        assertThat(memberCannotReadAnotherProfile.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
 
         // Unauthenticated access is rejected.
         ResponseEntity<String> noAuth = rest.getForEntity("/api/users/me", String.class);

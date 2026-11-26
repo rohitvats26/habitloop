@@ -104,16 +104,18 @@
 {:else if !error}
   <div class="grid tiles">
     {#each connections as c (c.connectionId)}
-      <div class="card tile">
+      <article class="tile">
         <hl-partner-tile
           partner={c.partner}
           status={c.status}
           connection-id={c.connectionId}
           onhlRevoke={(event: CustomEvent<string>) => revoke(event.detail)}
         ></hl-partner-tile>
-        <div class="muted">Connected {c.connectedAt ? new Date(c.connectedAt).toLocaleDateString() : ''}</div>
-        <div class="muted">Last event {c.lastEventAt ? new Date(c.lastEventAt).toLocaleString() : '—'}</div>
-      </div>
+        <div class="tile-meta">
+          <span>Connected <strong>{c.connectedAt ? new Date(c.connectedAt).toLocaleDateString() : '—'}</strong></span>
+          <span>Last event <strong>{c.lastEventAt ? new Date(c.lastEventAt).toLocaleString() : '—'}</strong></span>
+        </div>
+      </article>
     {:else}
       <div class="empty-state">
         <div class="empty-state-copy"><strong>No partners connected</strong><p>Choose a wearable above to start syncing activity.</p></div>
@@ -124,11 +126,19 @@
 
 <style>
   .connect { margin-bottom: 1rem; max-width: 420px; }
-  .secret { border-color: var(--warning); margin-bottom: 1rem; }
+  .secret { border-color: color-mix(in srgb,var(--warning) 55%,var(--border)); border-top: 3px solid var(--warning); margin-bottom: 1rem; }
   .secret code { word-break: break-all; }
-  .kv { display: flex; align-items: center; gap: 0.75rem; padding: 0.3rem 0; }
+  .kv { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0; border-top: 1px solid var(--border); }
   .kv .muted { width: 110px; flex-shrink: 0; }
   .kv code { flex: 1; min-width: 0; }
   .tiles { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-  .tile { display: grid; gap: 0.5rem; }
+  .tile { display: grid; align-content: start; gap: .55rem; }
+  .tile-meta { display: grid; gap: .3rem; padding: .25rem .25rem 0; color: var(--text-muted); font-size: .75rem; }
+  .tile-meta span { display: flex; justify-content: space-between; gap: .5rem; }
+  .tile-meta strong { color: var(--text); font-weight: 600; text-align: right; }
+  @media (max-width: 560px) {
+    .kv { align-items: flex-start; flex-wrap: wrap; }
+    .kv .muted { width: 100%; }
+    .kv code { flex-basis: calc(100% - 70px); }
+  }
 </style>

@@ -58,8 +58,9 @@ Rendered topology: see diagram 5 in [03-diagrams.md](03-diagrams.md).
 - **Application Load Balancer** in public subnets, HTTPS listener (ACM cert), HTTP→HTTPS redirect.
 - **Path-based routing** to the backend service target groups (the ALB is the AWS entry point; locally,
   clients call service ports directly):
-  `/api/auth/*`,`/api/users/*` → user-service; `/api/habits/*`,`/api/activity/*` → activity-service;
-  `/api/challenges/*`,`/api/invitations/*` → challenge-service; `/api/integrations/*`,`/api/webhooks/*`
+  `/api/auth/*`,`/api/users/*` → user-service; `/api/habits/*`,`/api/activity/*`
+  → activity-service; `/api/challenges/*`,`/api/invitations/*`,`/api/achievements/*` → challenge-service;
+  `/api/integrations/*`,`/api/webhooks/*`
   → integration-service; `/api/analytics/*` → analytics-service; `/api/recommendations/*` →
   recommendation-service.
 - Deregistration delay + slow-start for zero-downtime deploys.

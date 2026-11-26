@@ -5,6 +5,7 @@ import com.habitloop.activity.dto.CompletionRequest;
 import com.habitloop.activity.dto.CompletionResponse;
 import com.habitloop.activity.dto.CreateHabitRequest;
 import com.habitloop.activity.dto.HabitResponse;
+import com.habitloop.activity.dto.PauseHabitRequest;
 import com.habitloop.activity.dto.UpdateHabitRequest;
 import com.habitloop.activity.service.HabitService;
 import com.habitloop.common.web.PageResponse;
@@ -60,6 +61,18 @@ public class HabitController {
     @Operation(summary = "Update a habit")
     public HabitResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateHabitRequest request) {
         return habitService.update(id, request);
+    }
+
+    @PostMapping("/{id}/pause")
+    @Operation(summary = "Pause a habit for a number of days")
+    public HabitResponse pause(@PathVariable UUID id, @Valid @RequestBody PauseHabitRequest request) {
+        return habitService.pause(id, request);
+    }
+
+    @PostMapping("/{id}/resume")
+    @Operation(summary = "Resume a paused habit")
+    public HabitResponse resume(@PathVariable UUID id) {
+        return habitService.resume(id);
     }
 
     @DeleteMapping("/{id}")

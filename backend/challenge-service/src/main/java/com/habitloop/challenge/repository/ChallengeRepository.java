@@ -15,11 +15,13 @@ public interface ChallengeRepository extends JpaRepository<Challenge, UUID> {
 
     Optional<Challenge> findByIdAndTenantIdAndDeletedAtIsNull(UUID id, UUID tenantId);
 
-    /** Feed: public challenges in the tenant plus the caller's own, newest first. */
+    /** Feed: public challenges and the caller's private challenges, newest first. */
     @Query("""
             select c from Challenge c
             where c.tenantId = :tenantId and c.deletedAt is null
-              and (c.visibility = :publicVisibility or c.creatorId = :userId)
+              and (c.visibility = :publicVisibility or c.creatorId = :userId
+                   or exists (select p.id from ChallengeParticipant p
+                              where p.challengeId = c.id and p.tenantId = :tenantId and p.userId = :userId))
             order by c.createdAt desc
             """)
     Page<Challenge> feed(@Param("tenantId") UUID tenantId,

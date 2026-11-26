@@ -14,12 +14,16 @@ import com.habitloop.common.exception.BusinessException;
 import com.habitloop.common.exception.CrossTenantAccessException;
 import com.habitloop.common.exception.ResourceNotFoundException;
 import com.habitloop.common.security.SecurityUtils;
+import com.habitloop.common.time.TimeZones;
 import com.habitloop.common.web.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
+import java.time.LocalDate;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class ChallengeService {
@@ -27,12 +31,14 @@ public class ChallengeService {
     private final ChallengeRepository challenges;
     private final ChallengeParticipantRepository participants;
     private final ChallengeMapper mapper;
+    private final AchievementService achievements;
 
     public ChallengeService(ChallengeRepository challenges, ChallengeParticipantRepository participants,
-                            ChallengeMapper mapper) {
+                            ChallengeMapper mapper, AchievementService achievements) {
         this.challenges = challenges;
         this.participants = participants;
         this.mapper = mapper;
+        this.achievements = achievements;
     }
 
     @Transactional
@@ -54,14 +60,19 @@ public class ChallengeService {
         c = challenges.save(c);
 
         addParticipant(c, userId()); // creator auto-joins
-        return mapper.toSummary(c);
+        return mapper.toSummary(c, true);
     }
 
     @Transactional(readOnly = true)
     public PageResponse<ChallengeSummary> feed(Pageable pageable) {
-        var page = challenges.feed(tenantId(), userId(), Visibility.PUBLIC, pageable)
-                .map(mapper::toSummary);
-        return PageResponse.of(page);
+        UUID tenant = tenantId();
+        UUID user = userId();
+        var page = challenges.feed(tenant, user, Visibility.PUBLIC, pageable);
+        var ids = page.getContent().stream().map(Challenge::getId).toList();
+        Set<UUID> joined = ids.isEmpty() ? Set.of()
+                : participants.findByTenantIdAndUserIdAndChallengeIdIn(tenant, user, ids).stream()
+                        .map(ChallengeParticipant::getChallengeId).collect(Collectors.toSet());
+        return PageResponse.of(page.map(c -> mapper.toSummary(c, joined.contains(c.getId()))));
     }
 
     @Transactional(readOnly = true)
@@ -83,9 +94,16 @@ public class ChallengeService {
             throw new CrossTenantAccessException("Private challenge requires an invitation");
         }
         if (!participants.existsByChallengeIdAndUserId(challengeId, userId())) {
+            requireOpen(c);
             addParticipant(c, userId());
         }
         return details(challengeId);
+    }
+
+    void requireOpen(Challenge c) {
+        if (c.statusOn(LocalDate.now(TimeZones.INDIA)) != ChallengeStatus.ACTIVE) {
+            throw new BusinessException("This challenge is not open to join");
+        }
     }
 
     ChallengeParticipant addParticipant(Challenge c, UUID user) {
@@ -93,7 +111,9 @@ public class ChallengeService {
         p.setTenantId(c.getTenantId());
         p.setChallengeId(c.getId());
         p.setUserId(user);
-        return participants.save(p);
+        ChallengeParticipant saved = participants.save(p);
+        achievements.awardChallengeParticipation(c.getTenantId(), user, c.getId());
+        return saved;
     }
 
     private Challenge requireChallenge(UUID challengeId) {

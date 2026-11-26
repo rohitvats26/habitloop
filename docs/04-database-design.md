@@ -75,11 +75,25 @@ CREATE TABLE habits (
     schedule    JSONB NOT NULL DEFAULT '{}',         -- {daysOfWeek:[1,3,5], targetTime:"07:00", perWeek:3}
     target_per_period INT NOT NULL DEFAULT 1,
     active      BOOLEAN NOT NULL DEFAULT true,
+    paused_until DATE,                                -- temporary pause end date (Asia/Kolkata)
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMPTZ
 );
 CREATE INDEX ix_habits_tenant_user ON habits(tenant_id, user_id) WHERE deleted_at IS NULL;
+
+CREATE TABLE habit_pause_periods (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id   UUID NOT NULL,
+    user_id     UUID NOT NULL,
+    habit_id    UUID NOT NULL REFERENCES habits(id),
+    start_date  DATE NOT NULL,
+    resume_date DATE NOT NULL,                       -- exclusive: the first active day
+    resumed_at  TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX ix_habit_pause_periods_tenant_habit
+    ON habit_pause_periods(tenant_id, habit_id, start_date, resume_date);
 
 CREATE TABLE habit_completions (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -123,6 +137,41 @@ CREATE TABLE activity_log (
         UNIQUE (tenant_id, user_id, source, external_event_id)   -- NFR-2: no duplicate logs
 );
 CREATE INDEX ix_activitylog_tenant_user_time ON activity_log(tenant_id, user_id, occurred_at);
+```
+
+The historical `V3__in_app_notifications.sql` migration is retained for Flyway compatibility.
+It creates the following unused tables; existing data is not deleted when notification functionality is removed.
+```sql
+CREATE TABLE notification_preferences (
+    id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id                  UUID NOT NULL,
+    user_id                    UUID NOT NULL,
+    reminders_enabled          BOOLEAN NOT NULL DEFAULT true,
+    completion_updates_enabled BOOLEAN NOT NULL DEFAULT true,
+    reminder_time              TIME NOT NULL DEFAULT '09:00', -- interpreted as Asia/Kolkata
+    updated_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_notification_preference_user UNIQUE (tenant_id, user_id)
+);
+
+CREATE TABLE in_app_notifications (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id         UUID NOT NULL,
+    user_id           UUID NOT NULL,
+    habit_id          UUID,
+    idempotency_key   VARCHAR(200) NOT NULL,
+    notification_type VARCHAR(32) NOT NULL,
+    title             VARCHAR(120) NOT NULL,
+    message           VARCHAR(500) NOT NULL,
+    delivery_status   VARCHAR(20) NOT NULL,
+    delivery_attempts INT NOT NULL DEFAULT 1,
+    reminder_date     DATE,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    delivered_at      TIMESTAMPTZ NOT NULL,
+    read_at           TIMESTAMPTZ,
+    CONSTRAINT uq_notification_idempotency UNIQUE (tenant_id, user_id, idempotency_key)
+);
+CREATE INDEX ix_notifications_tenant_user_created
+    ON in_app_notifications(tenant_id, user_id, created_at DESC);
 ```
 
 **Notes.** Two uniqueness guards create idempotency: `uq_completion_per_day` (one manual tick per habit
@@ -178,10 +227,39 @@ CREATE TABLE challenge_participants (
     CONSTRAINT uq_participant UNIQUE (challenge_id, user_id)
 );
 CREATE INDEX ix_participants_tenant_user ON challenge_participants(tenant_id, user_id);
+
+CREATE TABLE achievement_awards (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id   UUID NOT NULL,
+    user_id     UUID NOT NULL,
+    code        VARCHAR(40) NOT NULL,
+    source_key  VARCHAR(128) NOT NULL,
+    title       VARCHAR(100) NOT NULL,
+    description VARCHAR(300) NOT NULL,
+    awarded_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_achievement_award UNIQUE (tenant_id, user_id, code, source_key)
+);
+CREATE INDEX ix_achievement_awards_tenant_user_time
+    ON achievement_awards(tenant_id, user_id, awarded_at DESC);
+
+CREATE TABLE achievement_activity_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID NOT NULL,
+    user_id         UUID NOT NULL,
+    activity_log_id UUID NOT NULL,
+    completion_date DATE NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_achievement_activity_event UNIQUE (tenant_id, user_id, activity_log_id)
+);
+CREATE INDEX ix_achievement_activity_dates
+    ON achievement_activity_events(tenant_id, user_id, completion_date DESC);
 ```
 
 **Notes.** Progress is accumulated from consumed `activity.logged` events; `completed` flips when
 `progress >= target`. Invitations are unique per `(challenge, invitee)`.
+
+The challenge-service also stores the user's earned achievements and activity-event receipts. Unique
+keys make event processing and milestone awards idempotent.
 
 ---
 

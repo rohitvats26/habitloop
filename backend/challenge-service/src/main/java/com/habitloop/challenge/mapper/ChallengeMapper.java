@@ -7,18 +7,21 @@ import com.habitloop.challenge.dto.LeaderboardEntry;
 import com.habitloop.challenge.entity.Challenge;
 import com.habitloop.challenge.entity.ChallengeInvitation;
 import com.habitloop.challenge.entity.ChallengeParticipant;
+import com.habitloop.common.time.TimeZones;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Component
 public class ChallengeMapper {
 
-    public ChallengeSummary toSummary(Challenge c) {
+    public ChallengeSummary toSummary(Challenge c, boolean joined) {
         return new ChallengeSummary(
                 c.getId().toString(), c.getTitle(), c.getDescription(),
-                c.getVisibility(), c.getStatus(), c.getTarget(), c.getStartsOn(), c.getEndsOn());
+                c.getVisibility(), c.statusOn(LocalDate.now(TimeZones.INDIA)),
+                c.getTarget(), c.getStartsOn(), c.getEndsOn(), joined);
     }
 
     public ChallengeDetailResponse toDetail(Challenge c, ChallengeParticipant me,
@@ -29,7 +32,8 @@ public class ChallengeMapper {
         BigDecimal myProgress = me == null ? null : me.getProgress();
         boolean completed = me != null && me.isCompleted();
         return new ChallengeDetailResponse(
-                c.getId().toString(), c.getTitle(), c.getDescription(), c.getVisibility(), c.getStatus(),
+                c.getId().toString(), c.getTitle(), c.getDescription(), c.getVisibility(),
+                c.statusOn(LocalDate.now(TimeZones.INDIA)),
                 c.getTarget(), c.getStartsOn(), c.getEndsOn(), myProgress, completed, leaderboard);
     }
 

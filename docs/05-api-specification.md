@@ -75,6 +75,8 @@ limits. Profile updates must include at least one field.
 | GET  | `/api/habits/{id}` | get habit (+streak) |
 | PUT  | `/api/habits/{id}` | update habit/schedule |
 | DELETE | `/api/habits/{id}` | soft-delete habit |
+| POST | `/api/habits/{id}/pause` | pause for 1–90 days (`{"days":7}`); automatically resumes in IST |
+| POST | `/api/habits/{id}/resume` | resume a paused habit |
 | POST | `/api/habits/{id}/completions` | mark complete (today / date) |
 | GET  | `/api/habits/{id}/completions` | completion history (paged) |
 | GET  | `/api/activity` | activity log (filters: from, to, type, paged) |
@@ -89,13 +91,18 @@ POST /api/habits
 ```
 Habit schedules accept `daysOfWeek` (unique ISO weekdays 1–7), `targetTime` (`HH:mm`), and `perWeek`
 (an integer from 1–7). A `CUSTOM` schedule requires either `daysOfWeek` or `perWeek`; unknown schedule
-fields are rejected. Updates must contain at least one field; targets must be positive.
+fields are rejected. Unselected weekdays are rest days. Weekly consistency is returned as
+`weeklyProgress` and compares completed habits against scheduled opportunities elapsed in the current
+IST week. Updates must contain at least one field; targets must be positive. Paused habits resume
+automatically at the start of the requested resume date.
 **Response `201`**
 ```json
 { "id": "4d2e...", "name": "Morning run", "frequency": "CUSTOM",
   "schedule": { "daysOfWeek": [1,3,5], "targetTime": "07:00", "perWeek": 3 },
-  "active": true, "streak": { "current": 0, "longest": 0 } }
+  "active": true, "pausedUntil": null, "streak": { "current": 0, "longest": 0 },
+  "weeklyProgress": { "completed": 1, "expected": 2, "consistencyPercent": 50 } }
 ```
+The optional `targetTime` records the intended habit time; it does not send a reminder.
 **Mark complete — request/response**
 ```json
 POST /api/habits/4d2e.../completions   { "date": "2026-11-23", "note": "felt great" }
@@ -111,13 +118,14 @@ Completion dates use IST and cannot be in the future; historical dates are accep
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/challenges` | create challenge |
-| GET  | `/api/challenges` | feed (public in tenant + mine); filters: status, visibility |
+| GET  | `/api/challenges` | feed (public in tenant plus private challenges created or joined by the caller) |
 | GET  | `/api/challenges/{id}` | details + my progress + leaderboard |
 | POST | `/api/challenges/{id}/join` | join a public challenge |
 | POST | `/api/challenges/{id}/invites` | invite a user (private/public) |
 | GET  | `/api/invitations` | my pending invitations |
 | POST | `/api/invitations/{id}/accept` | accept |
 | POST | `/api/invitations/{id}/reject` | reject |
+| GET | `/api/achievements` | current user's earned milestones (paged) |
 
 **Create challenge — request**
 ```json
@@ -126,8 +134,15 @@ POST /api/challenges
   "visibility": "PUBLIC", "metric": "DAYS_COMPLETED", "target": 30,
   "startsOn": "2026-12-01", "endsOn": "2026-12-30" }
 ```
-Challenge targets must fit the database precision (up to 10 integer digits and 2 decimal places), and
-`endsOn` must not precede `startsOn`.
+The feed includes `joined` for the current user, including creators and invitees. The target is a count
+of recorded activity events per participant, not a number of days: each event contributes one, regardless
+of the submitted metric label. `startsOn` and `endsOn` define the inclusive IST activity-date window;
+the end date is the deadline even if a participant has not reached the target. Activities before the
+participant's IST join date do not count. Delayed events are evaluated by their occurrence date, not
+their delivery date. Challenge targets must fit the database precision (up to 10 integer digits and 2
+decimal places), and `endsOn` must not precede `startsOn`. After the end date, active challenges are
+shown as ended and new participants cannot join or accept invitations. Delayed qualifying events may
+still update progress.
 **Details — response `200`**
 ```json
 { "id": "c3...", "title": "30-day Move", "visibility": "PUBLIC", "status": "ACTIVE",
@@ -156,6 +171,10 @@ email addresses are not accepted.
 { "connectionId": "b7...", "partner": "FITBIT", "status": "CONNECTED",
   "apiKey": "hl_live_8f3k...9", "webhookUrl": "https://.../api/webhooks/b7..." }
 ```
+
+Achievements are awarded idempotently for completion milestones (1, 10, 50, 100), 7- and 30-day
+completion streaks, challenge participation, and challenge completion. Activity-based awards are derived
+from the `activity.logged` event stream.
 **Webhook — request** (headers `X-HL-Signature: <hex HMAC-SHA256>`, `X-HL-Event-Id: evt_123`)
 ```json
 POST /api/webhooks/b7...
@@ -205,7 +224,7 @@ ISO-8601 date-time, and `habitId` must be a UUID. `409` only if a hard conflict.
   "items": [
     { "type": "TIMING", "habitId": "4d2e...", "title": "Run earlier",
       "message": "You complete 'Morning run' most on days you start before 7:30am.",
-      "action": { "label": "Set reminder 07:00", "suggestedTime": "07:00" }, "confidence": 0.82 },
+      "action": { "label": "Set target time 07:00", "suggestedTime": "07:00" }, "confidence": 0.82 },
     { "type": "FREQUENCY", "habitId": "9a...", "title": "Try 4×/week",
       "message": "Your 5×/week target is missed on Fridays; 4×/week fits your pattern.",
       "action": { "label": "Change target to 4", "suggestedPerWeek": 4 }, "confidence": 0.74 }

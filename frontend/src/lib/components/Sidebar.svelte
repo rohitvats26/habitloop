@@ -13,6 +13,7 @@
     { href: '/integrations', label: 'Integrations', icon: 'integrations' },
     { href: '/analytics', label: 'Analytics', icon: 'analytics' },
     { href: '/recommendations', label: 'Recommendations', icon: 'recommendations' },
+    { href: '/achievements', label: 'Achievements', icon: 'achievements' },
     { href: '/profile', label: 'Profile', icon: 'profile' }
   ];
 
@@ -51,6 +52,8 @@
               <path d="M4 20V10m5 10V4m5 16v-7m5 7V7" />
             {:else if link.icon === 'recommendations'}
               <path d="m12 3 1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3ZM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" />
+            {:else if link.icon === 'achievements'}
+              <path d="M8 4h8v4a4 4 0 0 1-8 0V4ZM8 6H5v2a4 4 0 0 0 4 4m7-6h3v2a4 4 0 0 1-4 4m-3 1v4m-4 3h8m-7 0v-3h6v3" />
             {:else}
               <circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" />
             {/if}

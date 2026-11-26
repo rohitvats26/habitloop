@@ -87,11 +87,14 @@
 {:else}
   <div class="grid list">
     {#each invitations as inv (inv.id)}
-      <div class="card inv">
-        <div>
+      <article class="card inv">
+        <div class="invite-info">
+          <span class="invite-icon" aria-hidden="true">✦</span>
+          <div>
           <strong>Challenge invite</strong>
           <div class="muted">From user {inv.inviterId.slice(0, 8)}…</div>
           <div class="muted">Challenge ID {inv.challengeId.slice(0, 8)}…</div>
+          </div>
         </div>
         <div class="ops">
           <button class="btn btn-primary" onclick={() => accept(inv.id)} disabled={processingIds.includes(inv.id)}>Accept</button>
@@ -100,7 +103,7 @@
           </button>
           <button class="btn" onclick={() => reject(inv.id)} disabled={processingIds.includes(inv.id)}>Reject</button>
         </div>
-      </div>
+      </article>
     {:else}
       <div class="empty-state">
         <div class="empty-state-copy"><strong>You're all caught up</strong><p>New challenge invitations will appear here.</p></div>
@@ -110,7 +113,12 @@
 {/if}
 
 <style>
-  .list { grid-template-columns: 1fr; }
-  .inv { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-  .ops { display: flex; gap: 0.5rem; }
+  .list { grid-template-columns: repeat(auto-fit,minmax(min(100%,420px),1fr)); }
+  .inv { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; border-left: 3px solid color-mix(in srgb,var(--primary) 54%,var(--border)); }
+  .invite-info { display: flex; min-width: min(100%,220px); flex: 1; align-items: center; gap: .8rem; }
+  .invite-info strong { display: block; margin-bottom: .2rem; }
+  .invite-info .muted { font-size: .8rem; }
+  .invite-icon { display: grid; width: 2.6rem; height: 2.6rem; flex: none; place-items: center; border-radius: 14px; background: color-mix(in srgb,var(--primary) 11%,var(--surface)); color: var(--primary); }
+  .ops { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  @media (max-width: 560px) { .ops { width: 100%; } .ops .btn { flex: 1; justify-content: center; } }
 </style>

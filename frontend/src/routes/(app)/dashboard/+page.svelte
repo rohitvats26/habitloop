@@ -182,14 +182,17 @@
   <div class="card grow">
     <h2>Recommendations</h2>
     {#if recs.length}
-      {#each recs.slice(0, 3) as r}
+      {#each recs.slice(0, 2) as r}
         <div class="rec">
-          <span class="badge">{r.type}</span>
-          <strong>{r.title}</strong>
-          <p class="muted">{r.message}</p>
+          <hl-recommendation-card
+            type={r.type}
+            headline={r.title}
+            message={r.message}
+            confidence={r.confidence}
+          ></hl-recommendation-card>
         </div>
       {/each}
-      <a href="/recommendations">See all →</a>
+      <a class="btn" href="/recommendations">Explore all recommendations <span aria-hidden="true">→</span></a>
     {:else}
       <div class="empty-state compact">
         <div class="empty-state-copy"><strong>Your tips are on the way</strong><p>Recommendations will appear as you build activity history.</p></div>
@@ -204,7 +207,10 @@
   .quick { margin-bottom: 1rem; }
   .quick-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
   .quick-heading p { margin: .2rem 0 .75rem; font-size: .85rem; }
-  .daily-progress { width: 100%; height: .6rem; margin: 0 0 .8rem; accent-color: var(--primary); }
+  .daily-progress { display: block; width: 100%; height: .75rem; margin: 0 0 .8rem; appearance: none; border: 0; border-radius: 999px; overflow: hidden; background: var(--surface-2); color: var(--primary); }
+  .daily-progress::-webkit-progress-bar { border-radius: 999px; background: var(--surface-2); }
+  .daily-progress::-webkit-progress-value { border-radius: 999px; background: linear-gradient(90deg,var(--primary),#55d8c8); transition: width .3s ease; }
+  .daily-progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(90deg,var(--primary),#55d8c8); }
   .quick-label { margin: .15rem 0 .75rem; font-size: .95rem; }
   .progress-message { margin: .3rem 0 .8rem; color: var(--success); font-weight: 650; }
   .more-habits { margin: .8rem 0 0; font-size: .85rem; }
@@ -216,10 +222,13 @@
   .grow { flex: 1; min-width: 280px; }
   .trend { list-style: none; padding: 0; margin: 0.75rem 0 0; }
   .trend li { display: flex; justify-content: space-between; padding: 0.25rem 0; border-top: 1px solid var(--border); }
-  .rec { padding: 0.5rem 0; border-top: 1px solid var(--border); }
-  .rec strong { display: block; margin: 0.2rem 0; }
+  .rec { margin: .75rem 0; }
+  .grow > a.btn { width: fit-content; margin-top: .35rem; }
   @media (max-width: 560px) {
     .quick-heading { flex-direction: column; }
     .quick-heading .btn { width: 100%; justify-content: center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .daily-progress::-webkit-progress-value { transition: none; }
   }
 </style>

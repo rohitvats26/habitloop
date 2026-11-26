@@ -86,6 +86,10 @@ public class Challenge {
         return !date.isBefore(startsOn) && !date.isAfter(endsOn);
     }
 
+    public ChallengeStatus statusOn(LocalDate date) {
+        return status == ChallengeStatus.ACTIVE && date.isAfter(endsOn) ? ChallengeStatus.ENDED : status;
+    }
+
     public UUID getId() {
         return id;
     }

@@ -13,6 +13,7 @@ import com.habitloop.challenge.repository.ChallengeParticipantRepository;
 import com.habitloop.challenge.repository.ChallengeRepository;
 import com.habitloop.common.time.TimeZones;
 import com.habitloop.common.exception.CrossTenantAccessException;
+import com.habitloop.common.exception.BusinessException;
 import com.habitloop.common.exception.DuplicateResourceException;
 import com.habitloop.common.security.AuthUser;
 import org.junit.jupiter.api.AfterEach;
@@ -34,6 +35,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -123,6 +126,24 @@ class InvitationServiceTest {
 
         assertThat(res.status()).isEqualTo(InvitationStatus.ACCEPTED);
         verify(challengeService).addParticipant(c, userId);
+    }
+
+    @Test
+    void accept_closedChallenge_doesNotAcceptInvitation() {
+        ChallengeInvitation inv = new ChallengeInvitation();
+        inv.setId(UUID.randomUUID());
+        inv.setTenantId(tenantId);
+        inv.setChallengeId(challengeId);
+        inv.setInviteeId(userId);
+        inv.setStatus(InvitationStatus.PENDING);
+        Challenge c = challenge(UUID.randomUUID());
+        when(invitations.findByIdAndTenantId(inv.getId(), tenantId)).thenReturn(Optional.of(inv));
+        when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId)).thenReturn(Optional.of(c));
+        doThrow(new BusinessException("This challenge is not open to join")).when(challengeService).requireOpen(c);
+
+        assertThatThrownBy(() -> service.accept(inv.getId())).isInstanceOf(BusinessException.class);
+        assertThat(inv.getStatus()).isEqualTo(InvitationStatus.PENDING);
+        verify(invitations, never()).save(any());
     }
 
     private Challenge challenge(UUID creatorId) {

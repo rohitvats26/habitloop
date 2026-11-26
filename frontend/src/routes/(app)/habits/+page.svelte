@@ -25,9 +25,9 @@
   let description = $state('');
   let frequency = $state<Habit['frequency']>('DAILY');
   let targetPerPeriod = $state(1);
-  let schedulePerWeek = $state<number | null>(null);
   let targetTime = $state('');
   let selectedDays = $state<number[]>([]);
+  let pausingHabitIds = $state<string[]>([]);
   const weekdays = [
     { value: 1, label: 'Monday' },
     { value: 2, label: 'Tuesday' },
@@ -56,11 +56,6 @@
   async function saveHabit(e: SubmitEvent) {
     e.preventDefault();
     error = '';
-    if (frequency === 'CUSTOM' && selectedDays.length === 0 && schedulePerWeek === null) {
-      error = 'Select at least one weekday or set a weekly target for a custom schedule.';
-      return;
-    }
-
     saving = true;
     try {
       const body = {
@@ -71,9 +66,7 @@
         schedule: {
           ...(targetTime ? { targetTime } : {}),
           ...(frequency === 'CUSTOM' && selectedDays.length > 0 ? { daysOfWeek: selectedDays } : {}),
-          ...(frequency !== 'DAILY' && schedulePerWeek !== null
-            ? { perWeek: Number(targetPerPeriod) }
-            : {})
+          ...(frequency !== 'DAILY' ? { perWeek: Number(targetPerPeriod) } : {})
         }
       };
       if (editingHabitId) {
@@ -98,9 +91,10 @@
     name = habit.name;
     description = habit.description ?? '';
     frequency = habit.frequency;
-    targetPerPeriod = habit.targetPerPeriod;
+    targetPerPeriod = typeof habit.schedule?.perWeek === 'number'
+      ? habit.schedule.perWeek
+      : habit.targetPerPeriod;
     targetTime = String(habit.schedule?.targetTime ?? '');
-    schedulePerWeek = typeof habit.schedule?.perWeek === 'number' ? habit.schedule.perWeek : null;
     selectedDays = Array.isArray(habit.schedule?.daysOfWeek)
       ? habit.schedule.daysOfWeek.filter((day): day is number => typeof day === 'number')
       : [];
@@ -114,7 +108,6 @@
     description = '';
     frequency = 'DAILY';
     targetPerPeriod = 1;
-    schedulePerWeek = null;
     targetTime = '';
     selectedDays = [];
   }
@@ -136,6 +129,25 @@
       pushToast(e instanceof Error ? e.message : 'Failed', 'error');
     } finally {
       completingHabitIds = completingHabitIds.filter((habitId) => habitId !== id);
+    }
+  }
+
+  async function togglePause(habit: Habit) {
+    if (pausingHabitIds.includes(habit.id)) return;
+    pausingHabitIds = [...pausingHabitIds, habit.id];
+    try {
+      if (habit.active) {
+        await api.habits.pause(habit.id, 7);
+        pushToast('Habit paused for 7 days', 'info');
+      } else {
+        await api.habits.resume(habit.id);
+        pushToast('Habit resumed', 'success');
+      }
+      await reload();
+    } catch (e) {
+      pushToast(e instanceof ApiError ? e.message : 'Could not update the habit pause.', 'error');
+    } finally {
+      pausingHabitIds = pausingHabitIds.filter((habitId) => habitId !== habit.id);
     }
   }
 
@@ -221,12 +233,12 @@
     </div>
     <div class="field"><label class="label" for="description">Description</label><input class="input" id="description" bind:value={description} maxlength="500" /></div>
     <div class="row">
-      <div class="field"><label class="label" for="targetPerPeriod">Target / period</label><input class="input" id="targetPerPeriod" type="number" min="1" max="2147483647" step="1" bind:value={targetPerPeriod} required /></div>
+      <div class="field"><label class="label" for="targetPerPeriod">{frequency === 'DAILY' ? 'Target per day' : 'Weekly target'}</label><input class="input" id="targetPerPeriod" type="number" min="1" max={frequency === 'DAILY' ? 1 : 7} step="1" bind:value={targetPerPeriod} required /></div>
       <div class="field"><label class="label" for="targetTime">Target time</label><input class="input" id="targetTime" type="time" bind:value={targetTime} /></div>
     </div>
     {#if frequency === 'CUSTOM'}
       <fieldset class="weekdays">
-        <legend class="label">Weekdays for custom schedule</legend>
+        <legend class="label">Active weekdays <span class="field-hint">Unselected days are rest days.</span></legend>
         {#each weekdays as day}
           <label>
             <input
@@ -258,12 +270,25 @@
             <hl-progress-ring value={h.streak?.current ?? 0} max={Math.max(h.streak?.longest ?? 0, 7)} label={`${h.streak?.current ?? 0}`}></hl-progress-ring>
             <span class="muted">current {h.streak?.current ?? 0} · best {h.streak?.longest ?? 0}</span>
           </div>
+          <div class="schedule-progress" aria-label="Weekly schedule consistency">
+            {#if h.active && h.weeklyProgress.expected > 0}
+              <span>This week: {h.weeklyProgress.completed}/{h.weeklyProgress.expected} expected · {h.weeklyProgress.consistencyPercent}% consistency</span>
+              <progress max="100" value={h.weeklyProgress.consistencyPercent} aria-label={`${h.weeklyProgress.consistencyPercent}% weekly consistency`}></progress>
+            {:else if !h.active}
+              <span>Paused{h.pausedUntil ? ` until ${h.pausedUntil}` : ''}</span>
+            {:else}
+              <span>No scheduled days yet this week</span>
+            {/if}
+          </div>
         </div>
         <div class="ops">
           <button class="btn" onclick={() => toggleHistory(h.id)}>
             {historyHabitId === h.id ? 'Hide history' : 'History'}
           </button>
           <button class="btn" onclick={() => edit(h)}>Edit</button>
+          <button class="btn" onclick={() => togglePause(h)} disabled={pausingHabitIds.includes(h.id)} aria-busy={pausingHabitIds.includes(h.id)}>
+            {pausingHabitIds.includes(h.id) ? 'Updating…' : h.active ? 'Pause 7 days' : 'Resume'}
+          </button>
           <button class="btn btn-primary" onclick={() => complete(h.id)} disabled={completingHabitIds.includes(h.id)} aria-busy={completingHabitIds.includes(h.id)}>
             {completingHabitIds.includes(h.id) ? 'Saving…' : 'Mark done today'}
           </button>
@@ -300,18 +325,30 @@
 
 <style>
   .actions { margin-bottom: 1rem; }
-  .create { max-width: 860px; margin-bottom: 1rem; }
+  .create { max-width: 860px; margin-bottom: 1.1rem; border-top: 3px solid color-mix(in srgb,var(--primary) 62%,transparent); }
+  .create h2 { font-size: 1.25rem; }
   .grow { flex: 1; }
   .list { grid-template-columns: 1fr; }
-  .habit { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-  .head { display: flex; align-items: center; gap: 0.5rem; }
-  .streak { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; }
+  .habit { display: flex; justify-content: space-between; align-items: center; gap: 1.1rem; flex-wrap: wrap; border-left: 3px solid color-mix(in srgb,var(--primary) 54%,var(--border)); }
+  .info { min-width: min(100%,260px); flex: 1; }
+  .head { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+  .head strong { font-size: 1.08rem; letter-spacing: -.015em; }
+  .streak { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.6rem; }
+  .schedule-progress { display: grid; gap: .35rem; max-width: 440px; margin-top: .65rem; color: var(--text-muted); font-size: .82rem; }
+  .schedule-progress progress { width: 100%; height: 7px; accent-color: var(--primary); }
   .ops { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  .history { flex-basis: 100%; border-top: 1px solid var(--border); padding-top: .75rem; }
+  .history { flex-basis: 100%; border-top: 1px solid var(--border); padding: .85rem .25rem .1rem; }
+  .history ul { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: .4rem; list-style: none; padding: 0; }
+  .history li { padding: .45rem .6rem; border-radius: 9px; background: var(--surface-2); color: var(--text-muted); font-size: .82rem; }
   .history h3 { margin: 0 0 .4rem; font-size: 1rem; }
   .history ul { margin: 0; padding-left: 1.2rem; }
   .error-text { color: var(--danger); }
   .weekdays { display: flex; flex-wrap: wrap; gap: 0.65rem; border: 0; padding: 0; margin: 0 0 1rem; }
   .weekdays legend { width: 100%; }
-  .weekdays label { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .weekdays label { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 38px; padding: .4rem .65rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+  .weekdays label:has(input:checked) { border-color: color-mix(in srgb,var(--primary) 40%,var(--border)); background: color-mix(in srgb,var(--primary) 8%,var(--surface)); }
+  @media (max-width: 560px) {
+    .ops { width: 100%; }
+    .ops .btn { flex: 1 1 calc(50% - .5rem); justify-content: center; }
+  }
 </style>

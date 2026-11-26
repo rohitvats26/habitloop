@@ -14,6 +14,7 @@ public record ChallengeSummary(
         ChallengeStatus status,
         BigDecimal target,
         LocalDate startsOn,
-        LocalDate endsOn
+        LocalDate endsOn,
+        boolean joined
 ) {
 }

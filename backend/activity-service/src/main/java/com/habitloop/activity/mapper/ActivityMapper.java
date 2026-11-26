@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.habitloop.activity.dto.ActivityLogResponse;
 import com.habitloop.activity.dto.HabitResponse;
+import com.habitloop.activity.dto.HabitWeeklyProgress;
 import com.habitloop.activity.dto.StreakDto;
 import com.habitloop.activity.entity.ActivityLog;
 import com.habitloop.activity.entity.Habit;
@@ -25,7 +26,7 @@ public class ActivityMapper {
         this.objectMapper = objectMapper;
     }
 
-    public HabitResponse toHabitResponse(Habit habit, HabitStreak streak) {
+    public HabitResponse toHabitResponse(Habit habit, HabitStreak streak, HabitWeeklyProgress weeklyProgress) {
         StreakDto streakDto = streak == null
                 ? StreakDto.zero()
                 : new StreakDto(streak.getCurrentStreak(), streak.getLongestStreak());
@@ -37,7 +38,9 @@ public class ActivityMapper {
                 readSchedule(habit.getSchedule()),
                 habit.getTargetPerPeriod(),
                 habit.isActive(),
-                streakDto);
+                streakDto,
+                habit.getPausedUntil(),
+                weeklyProgress);
     }
 
     public ActivityLogResponse toActivityLogResponse(ActivityLog log) {

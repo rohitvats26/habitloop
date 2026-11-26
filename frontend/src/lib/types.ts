@@ -29,7 +29,18 @@ export interface Habit {
   schedule: Record<string, unknown>;
   targetPerPeriod: number;
   active: boolean;
+  pausedUntil?: string;
+  weeklyProgress: { completed: number; expected: number; consistencyPercent: number };
   streak: { current: number; longest: number };
+}
+
+export interface Achievement {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  sourceId: string;
+  awardedAt: string;
 }
 
 export interface ActivityLog {
@@ -59,9 +70,10 @@ export interface ChallengeSummary {
   target: number;
   startsOn: string;
   endsOn: string;
+  joined: boolean;
 }
 
-export interface ChallengeDetail extends ChallengeSummary {
+export interface ChallengeDetail extends Omit<ChallengeSummary, 'joined'> {
   myProgress?: number;
   completed: boolean;
   leaderboard: { userId: string; progress: number; completed: boolean }[];
