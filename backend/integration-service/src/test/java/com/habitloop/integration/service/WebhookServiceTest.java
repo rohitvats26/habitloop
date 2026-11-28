@@ -189,6 +189,7 @@ class WebhookServiceTest {
         c.setHmacSecretRef("ref");
         c.setStatus(status);
         when(connections.findById(connectionId)).thenReturn(Optional.of(c));
+        lenient().when(connections.findForUpdateById(connectionId)).thenReturn(Optional.of(c));
         lenient().when(connections.save(any(PartnerConnection.class))).thenAnswer(i -> i.getArgument(0));
     }
 }

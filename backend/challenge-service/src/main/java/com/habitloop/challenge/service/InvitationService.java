@@ -20,7 +20,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class InvitationService {
@@ -74,10 +77,19 @@ public class InvitationService {
 
     @Transactional(readOnly = true)
     public PageResponse<InvitationResponse> myPendingInvitations(Pageable pageable) {
+        UUID tenant = tenantId();
         var page = invitations.findByTenantIdAndInviteeIdAndStatus(
-                        tenantId(), userId(), InvitationStatus.PENDING, pageable)
-                .map(mapper::toInvitationResponse);
-        return PageResponse.of(page);
+                tenant, userId(), InvitationStatus.PENDING, pageable);
+        Set<UUID> challengeIds = page.getContent().stream()
+                .map(ChallengeInvitation::getChallengeId).collect(Collectors.toSet());
+        Map<UUID, String> titles = challengeIds.isEmpty() ? Map.of()
+                : challenges.findAllById(challengeIds).stream()
+                        .filter(c -> tenant.equals(c.getTenantId()) && c.getDeletedAt() == null)
+                        .collect(Collectors.toMap(Challenge::getId, Challenge::getTitle));
+        Map<String, String> names = userClient.displayNames(page.getContent().stream()
+                .map(ChallengeInvitation::getInviterId).collect(Collectors.toSet()));
+        return PageResponse.of(page.map(inv -> mapper.toInvitationResponse(inv,
+                titles.get(inv.getChallengeId()), names.get(inv.getInviterId().toString()))));
     }
 
     @Transactional

@@ -3,6 +3,8 @@
   import { api, ApiError } from '$lib/api';
   import { setToken } from '$lib/auth.svelte';
 
+  let { data } = $props();
+
   let email = $state('');
   let password = $state('');
   let tenantCode = $state('');
@@ -15,7 +17,7 @@
     loading = true;
     try {
       const res = await api.auth.login({ email, password, tenantCode: tenantCode || undefined });
-      setToken(res.accessToken);
+      setToken(res.accessToken, res.refreshToken);
       await goto('/dashboard');
     } catch (err) {
       error = err instanceof ApiError ? err.message : "We couldn't sign you in. Please try again.";
@@ -24,6 +26,8 @@
     }
   }
 </script>
+
+<svelte:head><title>Log in · HabitLoop</title></svelte:head>
 
 <main class="auth-page">
   <div class="auth-layout">
@@ -51,7 +55,9 @@
         <span class="eyebrow">Your journey continues</span>
         <h1>Welcome back</h1>
         <p class="muted">Log in to pick up where you left off.</p>
-        {#if error}<div class="error-banner" role="alert">{error}</div>{/if}
+        {#if error}<div class="error-banner" role="alert">{error}</div>
+        {:else if data.registered}<div class="success-banner" role="status">Your account was created. Log in to continue.</div>
+        {:else if data.expired}<div class="error-banner" role="status">Your session has ended. Please log in again.</div>{/if}
         <div class="field">
           <label class="label" for="email">Email</label>
           <input class="input" id="email" type="email" autocomplete="username" bind:value={email} maxlength="255" required />

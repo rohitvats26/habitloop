@@ -65,6 +65,10 @@ export namespace Components {
           * @default ''
          */
         "name": string;
+        /**
+          * @default 'day'
+         */
+        "streakUnit": 'day' | 'week';
     }
     /**
      * Partner/wearable connection tile. Emits `hlRevoke` with the connection id.
@@ -93,6 +97,16 @@ export namespace Components {
          */
         "max": number;
         /**
+          * Accessible name for the progress bar.
+          * @default 'Habit progress'
+         */
+        "ringLabel": string;
+        /**
+          * Rendered diameter in pixels.
+          * @default 68
+         */
+        "size": number;
+        /**
           * @default 0
          */
         "value": number;
@@ -119,13 +133,19 @@ export namespace Components {
         "type": string;
     }
     /**
-     * Activity summary / KPI card. Usage: <hl-stat-card label="This week" value="12"></hl-stat-card>
+     * Activity summary / KPI card. Usage: <hl-stat-card label="This week" value="12" tone="accent" icon="flame"></hl-stat-card>
      */
     interface HlStatCard {
+        "hint"?: string;
+        "icon"?: 'check' | 'calendar' | 'flame' | 'target' | 'spark';
         /**
           * @default ''
          */
         "label": string;
+        /**
+          * @default 'primary'
+         */
+        "tone": 'primary' | 'accent' | 'violet' | 'success';
         /**
           * @default ''
          */
@@ -219,7 +239,7 @@ declare global {
         new (): HTMLHlRecommendationCardElement;
     };
     /**
-     * Activity summary / KPI card. Usage: <hl-stat-card label="This week" value="12"></hl-stat-card>
+     * Activity summary / KPI card. Usage: <hl-stat-card label="This week" value="12" tone="accent" icon="flame"></hl-stat-card>
      */
     interface HTMLHlStatCardElement extends Components.HlStatCard, HTMLStencilElement {
     }
@@ -298,6 +318,10 @@ declare namespace LocalJSX {
          */
         "name"?: string;
         "onHlComplete"?: (event: HlHabitCardCustomEvent<string>) => void;
+        /**
+          * @default 'day'
+         */
+        "streakUnit"?: 'day' | 'week';
     }
     /**
      * Partner/wearable connection tile. Emits `hlRevoke` with the connection id.
@@ -327,6 +351,16 @@ declare namespace LocalJSX {
          */
         "max"?: number;
         /**
+          * Accessible name for the progress bar.
+          * @default 'Habit progress'
+         */
+        "ringLabel"?: string;
+        /**
+          * Rendered diameter in pixels.
+          * @default 68
+         */
+        "size"?: number;
+        /**
           * @default 0
          */
         "value"?: number;
@@ -353,13 +387,19 @@ declare namespace LocalJSX {
         "type"?: string;
     }
     /**
-     * Activity summary / KPI card. Usage: <hl-stat-card label="This week" value="12"></hl-stat-card>
+     * Activity summary / KPI card. Usage: <hl-stat-card label="This week" value="12" tone="accent" icon="flame"></hl-stat-card>
      */
     interface HlStatCard {
+        "hint"?: string;
+        "icon"?: 'check' | 'calendar' | 'flame' | 'target' | 'spark';
         /**
           * @default ''
          */
         "label"?: string;
+        /**
+          * @default 'primary'
+         */
+        "tone"?: 'primary' | 'accent' | 'violet' | 'success';
         /**
           * @default ''
          */
@@ -380,6 +420,7 @@ declare namespace LocalJSX {
         "habitId": string;
         "current": number;
         "longest": number;
+        "streakUnit": 'day' | 'week';
         "completed": boolean;
         "loading": boolean;
     }
@@ -392,6 +433,8 @@ declare namespace LocalJSX {
         "value": number;
         "max": number;
         "label": string;
+        "size": number;
+        "ringLabel": string;
     }
     interface HlRecommendationCardAttributes {
         "type": string;
@@ -402,6 +445,9 @@ declare namespace LocalJSX {
     interface HlStatCardAttributes {
         "label": string;
         "value": string;
+        "hint": string;
+        "tone": 'primary' | 'accent' | 'violet' | 'success';
+        "icon": 'check' | 'calendar' | 'flame' | 'target' | 'spark';
     }
 
     interface IntrinsicElements {
@@ -444,7 +490,7 @@ declare module "@stencil/core" {
              */
             "hl-recommendation-card": LocalJSX.IntrinsicElements["hl-recommendation-card"] & JSXBase.HTMLAttributes<HTMLHlRecommendationCardElement>;
             /**
-             * Activity summary / KPI card. Usage: <hl-stat-card label="This week" value="12"></hl-stat-card>
+             * Activity summary / KPI card. Usage: <hl-stat-card label="This week" value="12" tone="accent" icon="flame"></hl-stat-card>
              */
             "hl-stat-card": LocalJSX.IntrinsicElements["hl-stat-card"] & JSXBase.HTMLAttributes<HTMLHlStatCardElement>;
         }

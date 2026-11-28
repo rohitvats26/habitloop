@@ -161,12 +161,16 @@ module "eventbridge" {
 }
 
 module "observability" {
-  source         = "../../modules/observability"
-  name           = var.name
-  region         = var.region
-  alb_arn_suffix = module.alb.alb_arn_suffix
-  lambda_name    = module.eventbridge.lambda_name
-  dlq_name       = module.eventbridge.dlq_name
-  rds_identifier = "${var.name}-postgres"
-  alarm_email    = var.alarm_email
+  source                     = "../../modules/observability"
+  name                       = var.name
+  region                     = var.region
+  alb_arn_suffix             = module.alb.alb_arn_suffix
+  lambda_name                = module.eventbridge.lambda_name
+  dlq_name                   = module.eventbridge.dlq_name
+  internal_dlq_name          = module.eventbridge.internal_dlq_name
+  consumer_queue_names       = module.eventbridge.queue_names
+  activity_log_group_name    = module.ecs.activity_log_group_name
+  integration_log_group_name = module.ecs.integration_log_group_name
+  rds_identifier             = "${var.name}-postgres"
+  alarm_email                = var.alarm_email
 }

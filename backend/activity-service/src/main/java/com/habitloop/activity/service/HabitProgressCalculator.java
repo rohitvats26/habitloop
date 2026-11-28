@@ -2,6 +2,7 @@ package com.habitloop.activity.service;
 
 import com.habitloop.activity.dto.HabitWeeklyProgress;
 import com.habitloop.activity.dto.HabitPauseRange;
+import com.habitloop.activity.dto.HabitScheduleVersionDto;
 import com.habitloop.activity.entity.Frequency;
 
 import java.time.DayOfWeek;
@@ -12,6 +13,54 @@ import java.util.Map;
 public final class HabitProgressCalculator {
 
     private HabitProgressCalculator() {
+    }
+
+    public static HabitWeeklyProgress calculate(List<HabitScheduleVersionDto> versions, LocalDate createdOn,
+                                                LocalDate today, int completed, boolean active,
+                                                List<HabitPauseRange> pauses) {
+        LocalDate weekStart = today.with(DayOfWeek.MONDAY);
+        HabitScheduleVersionDto first = StreakCalculator.scheduleAt(versions, weekStart);
+        if (StreakCalculator.isWeekly(first)) {
+            return calculate(first.frequency(), first.schedule(), first.targetPerPeriod(),
+                    createdOn, today, completed, active, pauses);
+        }
+        if (!active) {
+            return new HabitWeeklyProgress(completed, 0, 0);
+        }
+        int expected = 0;
+        int groupExpected = 0;
+        HabitScheduleVersionDto group = null;
+        LocalDate start = createdOn.isAfter(weekStart) ? createdOn : weekStart;
+        for (LocalDate day = start; !day.isAfter(today); day = day.plusDays(1)) {
+            HabitScheduleVersionDto version = StreakCalculator.scheduleAt(versions, day);
+            if (group != null && !sameDailyRules(group, version)) {
+                expected += capGroup(groupExpected, group);
+                groupExpected = 0;
+            }
+            group = version;
+            Object rawDays = version.schedule().get("daysOfWeek");
+            int weekday = day.getDayOfWeek().getValue();
+            if (!isPaused(day, pauses) && (!(rawDays instanceof List<?> days) || days.isEmpty()
+                    || days.stream().anyMatch(value -> value instanceof Number number
+                    && number.intValue() == weekday))) {
+                groupExpected++;
+            }
+        }
+        if (group != null) {
+            expected += capGroup(groupExpected, group);
+        }
+        int percentage = expected == 0 ? 0 : Math.min(100, completed * 100 / expected);
+        return new HabitWeeklyProgress(completed, expected, percentage);
+    }
+
+    private static boolean sameDailyRules(HabitScheduleVersionDto left, HabitScheduleVersionDto right) {
+        return java.util.Objects.equals(left.schedule().get("daysOfWeek"), right.schedule().get("daysOfWeek"))
+                && java.util.Objects.equals(left.schedule().get("perWeek"), right.schedule().get("perWeek"));
+    }
+
+    private static int capGroup(int expected, HabitScheduleVersionDto group) {
+        Object perWeek = group.schedule().get("perWeek");
+        return perWeek instanceof Number number ? Math.min(expected, number.intValue()) : expected;
     }
 
     public static HabitWeeklyProgress calculate(Frequency frequency, Map<String, Object> schedule,

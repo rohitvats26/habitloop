@@ -17,7 +17,7 @@ import { Component, Event, EventEmitter, Prop, h } from '@stencil/core';
     .streaks { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
     .current { color: var(--text,#172b2b); font-size: .78rem; font-weight: 650; }
     .best { padding: .18rem .45rem; border-radius: 999px; background: color-mix(in srgb,var(--warning,#b7791f) 12%,var(--surface,#fff)); color: var(--warning,#b7791f); font-size: .68rem; font-weight: 700; }
-    button { min-height: 40px; border: 0; background: var(--primary,#087f75); color: var(--primary-ink,#fff); border-radius: 11px; padding: .55rem .8rem; font: 650 .78rem var(--font,system-ui); cursor: pointer; transition: transform .15s ease,filter .15s ease; }
+    button { flex: none; min-height: 40px; border: 0; background: var(--primary,#087f75); color: var(--primary-ink,#fff); border-radius: 11px; padding: .55rem .85rem; font: 650 .78rem var(--font,system-ui); white-space: nowrap; cursor: pointer; transition: transform .15s ease,filter .15s ease; }
     button:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-1px); }
     button:focus-visible { outline: 3px solid color-mix(in srgb,var(--primary,#087f75) 35%,transparent); outline-offset: 3px; }
     button:disabled { background: color-mix(in srgb,var(--success,#16845d) 12%,var(--surface-2,#eaf4f3)); color: var(--success,#16845d); cursor: default; }
@@ -30,6 +30,7 @@ export class HlHabitCard {
   @Prop() habitId = '';
   @Prop() current = 0;
   @Prop() longest = 0;
+  @Prop() streakUnit: 'day' | 'week' = 'day';
   @Prop() completed = false;
   @Prop() loading = false;
   @Event() hlComplete: EventEmitter<string>;
@@ -48,7 +49,7 @@ export class HlHabitCard {
         </div>
         <div class="footer">
           <div class="streaks">
-            <span class="current">{this.current} day streak</span>
+            <span class="current">{this.current} {this.streakUnit} streak</span>
             <span class="best">Best {this.longest}</span>
           </div>
           <button

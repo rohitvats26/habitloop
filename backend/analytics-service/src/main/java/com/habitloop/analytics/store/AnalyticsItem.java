@@ -26,6 +26,7 @@ public class AnalyticsItem {
     private Map<String, Integer> byHour = new HashMap<>();
     private Map<String, Integer> byWeekday = new HashMap<>();
     private String updatedAt;
+    private String revision;
     private String gsi1pk;
     private String gsi1sk;
 
@@ -95,6 +96,14 @@ public class AnalyticsItem {
         this.updatedAt = updatedAt;
     }
 
+    public String getRevision() {
+        return revision;
+    }
+
+    public void setRevision(String revision) {
+        this.revision = revision;
+    }
+
     @DynamoDbSecondaryPartitionKey(indexNames = GSI1)
     public String getGsi1pk() {
         return gsi1pk;
@@ -116,5 +125,21 @@ public class AnalyticsItem {
     /** Increments a key in a counter map. */
     public static void bump(Map<String, Integer> map, String key) {
         map.merge(key, 1, Integer::sum);
+    }
+
+    public AnalyticsItem copy() {
+        AnalyticsItem copy = new AnalyticsItem();
+        copy.pk = pk;
+        copy.sk = sk;
+        copy.completions = completions;
+        copy.targetMet = targetMet;
+        copy.currentStreak = currentStreak;
+        copy.byHour = new HashMap<>(byHour);
+        copy.byWeekday = new HashMap<>(byWeekday);
+        copy.updatedAt = updatedAt;
+        copy.revision = revision;
+        copy.gsi1pk = gsi1pk;
+        copy.gsi1sk = gsi1sk;
+        return copy;
     }
 }

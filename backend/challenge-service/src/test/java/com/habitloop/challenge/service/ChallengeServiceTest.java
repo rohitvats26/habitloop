@@ -44,6 +44,7 @@ class ChallengeServiceTest {
     @Mock ChallengeRepository challenges;
     @Mock ChallengeParticipantRepository participants;
     @Mock AchievementService achievements;
+    @Mock com.habitloop.challenge.client.UserClient userClient;
 
     ChallengeService service;
 
@@ -53,7 +54,7 @@ class ChallengeServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ChallengeService(challenges, participants, new ChallengeMapper(), achievements);
+        service = new ChallengeService(challenges, participants, new ChallengeMapper(), achievements, userClient);
         var principal = new AuthUser(userId.toString(), tenantId.toString(), List.of("USER"));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(principal, null, List.of()));
@@ -145,6 +146,28 @@ class ChallengeServiceTest {
         when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId)).thenReturn(Optional.of(c));
         when(participants.findByChallengeIdAndUserId(challengeId, userId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.details(challengeId)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void details_namesLeaderboardAndAllowsOnlyCreatorToInviteWhileOpen() {
+        Challenge c = challenge(Visibility.PUBLIC);
+        ChallengeParticipant me = new ChallengeParticipant();
+        me.setChallengeId(challengeId);
+        me.setUserId(userId);
+        when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId)).thenReturn(Optional.of(c));
+        when(participants.findByChallengeIdAndUserId(challengeId, userId)).thenReturn(Optional.of(me));
+        when(participants.findByChallengeIdAndTenantIdOrderByProgressDesc(challengeId, tenantId)).thenReturn(List.of(me));
+        when(userClient.displayNames(List.of(userId))).thenReturn(java.util.Map.of(userId.toString(), "Ria"));
+
+        var detail = service.details(challengeId);
+        assertThat(detail.canInvite()).isTrue();
+        assertThat(detail.leaderboard().get(0).displayName()).isEqualTo("Ria");
+
+        c.setCreatorId(UUID.randomUUID());
+        assertThat(service.details(challengeId).canInvite()).isFalse();
+        c.setCreatorId(userId);
+        c.setEndsOn(LocalDate.now(TimeZones.INDIA).minusDays(1));
+        assertThat(service.details(challengeId).canInvite()).isFalse();
     }
 
     private Challenge challenge(Visibility v) {

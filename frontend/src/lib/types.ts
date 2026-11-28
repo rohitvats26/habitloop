@@ -28,6 +28,12 @@ export interface Habit {
   frequency: 'DAILY' | 'WEEKLY' | 'CUSTOM';
   schedule: Record<string, unknown>;
   targetPerPeriod: number;
+  pendingSchedule?: {
+    effectiveDate: string;
+    frequency: 'DAILY' | 'WEEKLY' | 'CUSTOM';
+    schedule: Record<string, unknown>;
+    targetPerPeriod: number;
+  } | null;
   active: boolean;
   pausedUntil?: string;
   weeklyProgress: { completed: number; expected: number; consistencyPercent: number };
@@ -59,6 +65,7 @@ export interface ActivityQuery {
   to?: string;
   page?: number;
   size?: number;
+  sort?: string;
 }
 
 export interface ChallengeSummary {
@@ -74,15 +81,18 @@ export interface ChallengeSummary {
 }
 
 export interface ChallengeDetail extends Omit<ChallengeSummary, 'joined'> {
-  myProgress?: number;
+  myProgress?: number | null;
   completed: boolean;
-  leaderboard: { userId: string; progress: number; completed: boolean }[];
+  canInvite: boolean;
+  leaderboard: { userId: string; displayName?: string | null; progress: number; completed: boolean }[];
 }
 
 export interface Invitation {
   id: string;
   challengeId: string;
+  challengeTitle?: string | null;
   inviterId: string;
+  inviterName?: string | null;
   inviteeId: string;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
 }

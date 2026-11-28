@@ -1,5 +1,6 @@
 package com.habitloop.challenge.service;
 
+import com.habitloop.challenge.client.UserClient;
 import com.habitloop.challenge.dto.ChallengeDetailResponse;
 import com.habitloop.challenge.dto.ChallengeSummary;
 import com.habitloop.challenge.dto.CreateChallengeRequest;
@@ -32,13 +33,15 @@ public class ChallengeService {
     private final ChallengeParticipantRepository participants;
     private final ChallengeMapper mapper;
     private final AchievementService achievements;
+    private final UserClient userClient;
 
     public ChallengeService(ChallengeRepository challenges, ChallengeParticipantRepository participants,
-                            ChallengeMapper mapper, AchievementService achievements) {
+                            ChallengeMapper mapper, AchievementService achievements, UserClient userClient) {
         this.challenges = challenges;
         this.participants = participants;
         this.mapper = mapper;
         this.achievements = achievements;
+        this.userClient = userClient;
     }
 
     @Transactional
@@ -84,7 +87,8 @@ public class ChallengeService {
             throw new ResourceNotFoundException("Challenge", challengeId); // hide private challenges
         }
         var leaderboard = participants.findByChallengeIdAndTenantIdOrderByProgressDesc(challengeId, tenantId());
-        return mapper.toDetail(c, me, leaderboard);
+        var names = userClient.displayNames(leaderboard.stream().map(ChallengeParticipant::getUserId).toList());
+        return mapper.toDetail(c, me, leaderboard, names, isCreator);
     }
 
     @Transactional

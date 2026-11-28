@@ -3,6 +3,7 @@
   import LoadingState from '$lib/components/LoadingState.svelte';
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
+  import { fetchAllPages } from '$lib/pagination';
   import { pushToast } from '$lib/stores/toast.svelte';
   import {
     hasApplicableRecommendation,
@@ -56,15 +57,7 @@
     habitsLoading = true;
     habitsError = '';
     try {
-      let pageNumber = 0;
-      const allHabits: Habit[] = [];
-      let totalPages: number;
-      do {
-        const page = await api.habits.list(pageNumber);
-        allHabits.push(...page.content);
-        totalPages = page.totalPages;
-        pageNumber++;
-      } while (pageNumber < totalPages);
+      const allHabits = await fetchAllPages(api.habits.list);
       habits = allHabits.filter((habit) => habit.active);
     } catch (e) {
       habitsError = e instanceof ApiError ? e.message : 'Failed to load your habits.';
@@ -119,7 +112,7 @@
         return;
       }
       if (isRecommendationApplied(recommendation, current)) {
-        actionError = 'This recommendation is already applied to this habit.';
+        actionError = 'This recommendation is already applied or scheduled for this habit.';
         return;
       }
       const body = recommendationUpdate(recommendation, current);
@@ -129,7 +122,9 @@
       }
       const updated = (await api.habits.update(current.id, body)) as Habit;
       habits = habits.map((candidate) => candidate.id === updated.id ? updated : candidate);
-      pushToast('Recommendation applied to your habit', 'success');
+      pushToast(updated.pendingSchedule
+        ? `Recommendation scheduled for ${updated.pendingSchedule.effectiveDate} (IST)`
+        : 'Recommendation applied to your habit', 'success');
       activeRecommendation = null;
     } catch (e) {
       actionError = e instanceof ApiError ? e.message : 'Could not apply the recommendation.';
@@ -207,7 +202,7 @@
             {@const allApplied = !habitsLoading && !habitsError && targets.length > 0 && targets.every((habit) => isRecommendationApplied(r, habit))}
             <button class="btn btn-primary" onclick={() => prepareApply(r)} disabled={loadingHabits || habitsLoading || applying || allApplied}>
               {#if loadingHabits || habitsLoading}Loading habits…
-              {:else if allApplied}{r.habitId ? 'Already applied' : 'Applied to all active habits'}
+              {:else if allApplied}{r.habitId ? 'Already applied or scheduled' : 'Applied or scheduled for all active habits'}
               {:else}{r.action.label}{/if}
             </button>
             {#if activeRecommendation === r}
@@ -215,10 +210,10 @@
                 <label class="label" for="recommendation-habit">Apply to habit</label>
                 <select class="input" id="recommendation-habit" bind:value={selectedHabitId}>
                   {#each eligibleHabits as habit (habit.id)}
-                    <option value={habit.id}>{habit.name}{isRecommendationApplied(r, habit) ? ' (already applied)' : ''}</option>
+                    <option value={habit.id}>{habit.name}{isRecommendationApplied(r, habit) ? ' (applied or scheduled)' : ''}</option>
                   {/each}
                 </select>
-                {#if selectedHabit && typeof r.action.suggestedPerWeek === 'number' && 'daysOfWeek' in selectedHabit.schedule}
+                {#if selectedHabit && typeof r.action.suggestedPerWeek === 'number' && 'daysOfWeek' in (selectedHabit.pendingSchedule?.schedule ?? selectedHabit.schedule)}
                   <p class="field-hint">Applying this weekly goal replaces the habit's selected weekdays with a flexible weekly target.</p>
                 {/if}
                 <div class="apply-actions">
@@ -256,12 +251,12 @@
 <style>
   .insight-note {
     display: flex; align-items: center; gap: .75rem; margin: -0.75rem 0 1rem; padding: .8rem 1rem;
-    border: 1px solid color-mix(in srgb,#20b9aa 25%,var(--border)); border-radius: 14px;
-    background: linear-gradient(110deg,color-mix(in srgb,#20b9aa 8%,var(--surface)),var(--surface));
+    border: 1px solid color-mix(in srgb,var(--primary) 25%,var(--border)); border-radius: 14px;
+    background: linear-gradient(110deg,color-mix(in srgb,var(--primary) 8%,var(--surface)),var(--surface));
   }
-  .note-icon { display: grid; width: 2rem; height: 2rem; flex: none; place-items: center; border-radius: 10px; background: color-mix(in srgb,#20b9aa 15%,var(--surface)); color: #0c9b8e; }
+  .note-icon { display: grid; width: 2rem; height: 2rem; flex: none; place-items: center; border-radius: 10px; background: color-mix(in srgb,var(--primary) 15%,var(--surface)); color: var(--primary); }
   .insight-note p { flex: 1; margin: 0; color: var(--text-muted); font-size: .84rem; }
-  .note-label { color: #087f75; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+  .note-label { color: var(--primary-strong); font-size: .72rem; font-weight: 700; white-space: nowrap; }
   .list { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
   .rec { display: grid; align-content: start; gap: .75rem; }
   .no-category-results button { grid-column: 2; justify-self: start; }
@@ -279,14 +274,10 @@
     color: var(--text-muted); font: 600 .78rem var(--font); cursor: pointer;
     transition: border-color .15s ease, color .15s ease, background .15s ease;
   }
-  .category-filter:hover { border-color: color-mix(in srgb,#20b9aa 45%,var(--border)); color: var(--text); }
-  .category-filter.selected { border-color: color-mix(in srgb,#20b9aa 40%,var(--border)); background: color-mix(in srgb,#20b9aa 12%,var(--surface)); color: #087f75; }
-  .filter-count { display: grid; min-width: 1.2rem; height: 1.2rem; place-items: center; padding: 0 .25rem; border-radius: 999px; background: color-mix(in srgb,#20b9aa 12%,var(--surface)); font-size: .68rem; font-variant-numeric: tabular-nums; }
-  .category-filter:focus-visible { outline: 2px solid #20b9aa; outline-offset: 2px; }
-  @media (prefers-color-scheme: dark) {
-    .note-label, .category-filter.selected { color: #72e3d6; }
-    .note-icon { color: #51ddcc; }
-  }
+  .category-filter:hover { border-color: color-mix(in srgb,var(--primary) 45%,var(--border)); color: var(--text); }
+  .category-filter.selected { border-color: color-mix(in srgb,var(--primary) 40%,var(--border)); background: color-mix(in srgb,var(--primary) 12%,var(--surface)); color: var(--primary-strong); }
+  .filter-count { display: grid; min-width: 1.2rem; height: 1.2rem; place-items: center; padding: 0 .25rem; border-radius: 999px; background: color-mix(in srgb,var(--primary) 12%,var(--surface)); font-size: .68rem; font-variant-numeric: tabular-nums; }
+  .category-filter:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
   @media (max-width: 560px) {
     .insight-note { align-items: flex-start; flex-wrap: wrap; }
     .note-label { margin-left: 2.75rem; }

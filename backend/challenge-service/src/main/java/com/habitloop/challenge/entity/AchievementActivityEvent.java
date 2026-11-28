@@ -33,6 +33,9 @@ public class AchievementActivityEvent {
     @Column(name = "activity_log_id", nullable = false)
     private UUID activityLogId;
 
+    @Column(name = "habit_id")
+    private UUID habitId;
+
     @Column(name = "completion_date", nullable = false)
     private LocalDate completionDate;
 

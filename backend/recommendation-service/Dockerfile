@@ -4,7 +4,12 @@ COPY . .
 RUN mvn -pl recommendation-service -am package -DskipTests
 
 FROM eclipse-temurin:17-jre-alpine
+# Size the heap from the container memory limit (512 MB task -> ~384 MB heap) instead of the JVM's
+# 25% default, and exit on OOM so ECS replaces the task. Override per environment via JAVA_TOOL_OPTIONS.
+ENV JAVA_TOOL_OPTIONS="-XX:InitialRAMPercentage=50.0 -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+RUN addgroup -S -g 10001 habitloop && adduser -S -D -H -u 10001 -G habitloop habitloop
 WORKDIR /app
-COPY --from=build /app/recommendation-service/target/*.jar app.jar
+COPY --from=build --chown=habitloop:habitloop /app/recommendation-service/target/*.jar app.jar
+USER 10001:10001
 EXPOSE 8086
 ENTRYPOINT ["java","-jar","app.jar"]

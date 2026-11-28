@@ -4,40 +4,52 @@
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
   import { downloadCsv, toCsv } from '$lib/csv';
+  import { activityWhen } from '$lib/date';
+  import { fetchAllPages } from '$lib/pagination';
+  import { pushToast } from '$lib/stores/toast.svelte';
   import { INDIA_TIMEZONE_OFFSET } from '$lib/timezone';
-  import type { ActivityLog, Page } from '$lib/types';
+  import type { ActivityLog, ActivityQuery } from '$lib/types';
 
   let activity = $state<ActivityLog[]>([]);
+  let habitNames = $state<Record<string, string> | null>(null);
   let error = $state('');
+  let filterError = $state('');
   let loading = $state(true);
+  let exporting = $state(false);
   let filterType = $state('');
   let fromDate = $state('');
   let toDate = $state('');
+  let appliedQuery = $state<ActivityQuery>({});
   let currentPage = $state(0);
   let totalPages = $state(0);
   let totalElements = $state(0);
   const pageSize = 50;
-  const fmt = (iso: string) => new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-  async function load(page = currentPage) {
-    if (fromDate && toDate && fromDate > toDate) {
-      error = 'Start date must be on or before end date.';
-      return;
+  function habitLabel(item: ActivityLog): string {
+    if (!item.habitId) return '—';
+    if (habitNames === null) return 'Habit';
+    return habitNames[item.habitId] ?? 'Deleted habit';
+  }
+
+  async function loadHabitNames() {
+    try {
+      const habits = await fetchAllPages(api.habits.list);
+      habitNames = Object.fromEntries(habits.map((habit) => [habit.id, habit.name]));
+    } catch {
+      habitNames = null;
     }
+  }
+
+  async function load(page = currentPage, query = appliedQuery) {
     loading = true;
     error = '';
     try {
-      const a = (await api.activity.log({
-        type: filterType.trim() || undefined,
-        from: fromDate ? `${fromDate}T00:00:00${INDIA_TIMEZONE_OFFSET}` : undefined,
-        to: toDate ? `${toDate}T23:59:59.999999999${INDIA_TIMEZONE_OFFSET}` : undefined,
-        page,
-        size: pageSize
-      })) as Page<ActivityLog>;
-      activity = a.content ?? [];
-      currentPage = a.page ?? page;
-      totalPages = a.totalPages ?? 0;
-      totalElements = a.totalElements ?? 0;
+      const a = await api.activity.log({ ...query, page, size: pageSize });
+      activity = a.content;
+      appliedQuery = query;
+      currentPage = a.page;
+      totalPages = a.totalPages;
+      totalElements = a.totalElements;
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Failed to load activity';
     } finally {
@@ -47,19 +59,37 @@
 
   onMount(() => {
     void load();
+    void loadHabitNames();
   });
 
   function applyFilters(event: SubmitEvent) {
     event.preventDefault();
-    void load(0);
+    filterError = '';
+    if (fromDate && toDate && fromDate > toDate) {
+      filterError = 'Start date must be on or before end date.';
+      return;
+    }
+    void load(0, {
+      type: filterType.trim().toUpperCase() || undefined,
+      from: fromDate ? `${fromDate}T00:00:00${INDIA_TIMEZONE_OFFSET}` : undefined,
+      to: toDate ? `${toDate}T23:59:59.999999999${INDIA_TIMEZONE_OFFSET}` : undefined
+    });
   }
 
-  function exportPage() {
-    const csv = toCsv(
-      ['When (IST)', 'Activity type', 'Value', 'Unit', 'Source'],
-      activity.map((item) => [fmt(item.occurredAt), item.activityType, item.value, item.unit, item.source])
-    );
-    downloadCsv('habitloop-activity.csv', csv);
+  async function exportAll() {
+    if (exporting) return;
+    exporting = true;
+    try {
+      const rows = await fetchAllPages((page) => api.activity.log({ ...appliedQuery, page, size: 100, sort: 'id,asc' }));
+      downloadCsv('habitloop-activity.csv', toCsv(
+        ['When (IST)', 'Activity type', 'Habit', 'Value', 'Unit', 'Source'],
+        rows.map((item) => [activityWhen(item), item.activityType, habitLabel(item), item.value, item.unit, item.source])
+      ));
+    } catch (e) {
+      pushToast(e instanceof Error ? e.message : 'Could not export activity.', 'error');
+    } finally {
+      exporting = false;
+    }
   }
 </script>
 
@@ -80,13 +110,16 @@
   </div>
   <div class="filter-actions">
     <button class="btn btn-primary" type="submit" disabled={loading}>Apply filters</button>
-    <button class="btn" type="button" onclick={() => { filterType = ''; fromDate = ''; toDate = ''; void load(0); }} disabled={loading}>
+    <button class="btn" type="button" onclick={() => { filterType = ''; fromDate = ''; toDate = ''; void load(0, {}); }} disabled={loading}>
       Clear
     </button>
-    <button class="btn" type="button" onclick={exportPage} disabled={!activity.length}>Export this page</button>
+    <button class="btn" type="button" onclick={exportAll} disabled={loading || exporting || !totalElements} aria-busy={exporting}>
+      {exporting ? 'Exporting…' : `Export all (${totalElements})`}
+    </button>
   </div>
 </form>
-<p class="muted result-count">{totalElements} matching activities · dates shown in IST</p>
+{#if filterError}<div class="error-banner" role="alert">{filterError}</div>{/if}
+<p class="muted result-count">{totalElements} matching activities · dates shown in IST · habit completions show the day they count for</p>
 
 {#if loading}
   <LoadingState message="Loading your activity…" />
@@ -96,12 +129,13 @@
   <div class="card">
     {#if activity.length}
       <table>
-        <thead><tr><th>When</th><th>Type</th><th>Value</th><th>Source</th></tr></thead>
+        <thead><tr><th>When</th><th>Type</th><th>Habit</th><th>Value</th><th>Source</th></tr></thead>
         <tbody>
           {#each activity as a (a.id)}
             <tr>
-              <td>{fmt(a.occurredAt)}</td>
+              <td>{activityWhen(a)}</td>
               <td>{a.activityType}</td>
+              <td>{habitLabel(a)}</td>
               <td>{a.value ?? '—'} {a.unit ?? ''}</td>
               <td><span class="badge">{a.source}</span></td>
             </tr>

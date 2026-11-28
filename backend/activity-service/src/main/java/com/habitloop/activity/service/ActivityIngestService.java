@@ -8,7 +8,6 @@ import com.habitloop.activity.repository.ActivityLogRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,13 +53,7 @@ public class ActivityIngestService {
         entry.setSource(source);
         entry.setExternalEventId(n.externalEventId());
 
-        try {
-            entry = activityLogs.save(entry);
-        } catch (DataIntegrityViolationException dup) {
-            // Lost the race against a concurrent delivery of the same event — safe to skip.
-            log.info("Concurrent duplicate partner event {} — skipping", n.externalEventId());
-            return;
-        }
+        entry = activityLogs.save(entry);
 
         events.publishEvent(new ActivityLoggedEvent(
                 n.tenantId(), n.userId(), n.habitId(), entry.getId().toString(),

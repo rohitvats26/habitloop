@@ -72,7 +72,7 @@ locals {
   task_sqs_statements = length(var.event_queue_arns) == 0 ? [] : [
     {
       Effect   = "Allow"
-      Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+      Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
       Resource = var.event_queue_arns
     }
   ]
@@ -183,3 +183,5 @@ resource "aws_appautoscaling_policy" "cpu" {
 }
 
 output "cluster_name" { value = aws_ecs_cluster.this.name }
+output "activity_log_group_name" { value = aws_cloudwatch_log_group.svc["activity-service"].name }
+output "integration_log_group_name" { value = aws_cloudwatch_log_group.svc["integration-service"].name }

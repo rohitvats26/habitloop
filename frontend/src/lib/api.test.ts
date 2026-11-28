@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./auth.svelte', () => ({
   getToken: () => null,
+  getRefreshToken: () => null,
+  setToken: vi.fn(),
   logout: vi.fn()
 }));
 
@@ -45,8 +47,8 @@ describe('API errors', () => {
       await api.habits.list();
       await api.habits.list(1);
       expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-        'http://localhost:8082/api/habits?size=100',
-        'http://localhost:8082/api/habits?size=100&page=1'
+        'http://localhost:8082/api/habits?size=100&sort=id,asc',
+        'http://localhost:8082/api/habits?size=100&sort=id,asc&page=1'
       ]);
     });
 
@@ -64,7 +66,7 @@ describe('API errors', () => {
 
       expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method ?? 'GET'])).toEqual([
         ['http://localhost:8082/api/habits/habit-id/pause', 'POST'],
-        ['http://localhost:8083/api/achievements?size=100', 'GET']
+        ['http://localhost:8083/api/achievements?size=100&page=0&sort=id,asc', 'GET']
       ]);
     });
 

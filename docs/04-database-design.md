@@ -82,6 +82,19 @@ CREATE TABLE habits (
 );
 CREATE INDEX ix_habits_tenant_user ON habits(tenant_id, user_id) WHERE deleted_at IS NULL;
 
+CREATE TABLE habit_schedule_versions (
+    id UUID PRIMARY KEY,
+    habit_id UUID NOT NULL REFERENCES habits(id),
+    tenant_id UUID NOT NULL,
+    effective_date DATE NOT NULL,                    -- IST date, inclusive
+    frequency VARCHAR(20) NOT NULL,
+    schedule JSONB NOT NULL,
+    target_per_period INTEGER NOT NULL,
+    UNIQUE (habit_id, effective_date)
+);
+CREATE INDEX ix_schedule_versions_tenant_habit
+    ON habit_schedule_versions(tenant_id, habit_id, effective_date);
+
 CREATE TABLE habit_pause_periods (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id   UUID NOT NULL,
@@ -116,6 +129,9 @@ CREATE TABLE habit_streaks (
     current_streak INT NOT NULL DEFAULT 0,
     longest_streak INT NOT NULL DEFAULT 0,
     last_completed DATE,
+    snapshot_date DATE,                              -- IST Monday baseline; null means rebuild needed
+    snapshot_day_longest INT,
+    snapshot_week_longest INT,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -137,6 +153,21 @@ CREATE TABLE activity_log (
         UNIQUE (tenant_id, user_id, source, external_event_id)   -- NFR-2: no duplicate logs
 );
 CREATE INDEX ix_activitylog_tenant_user_time ON activity_log(tenant_id, user_id, occurred_at);
+
+CREATE TABLE activity_outbox (
+    id              UUID PRIMARY KEY,
+    partition_key   VARCHAR(100) NOT NULL,
+    envelope        TEXT NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at    TIMESTAMPTZ,
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_error      VARCHAR(500)
+);
+CREATE INDEX ix_activity_outbox_pending ON activity_outbox(next_attempt_at, created_at)
+    WHERE published_at IS NULL;
+CREATE INDEX ix_activity_outbox_partition ON activity_outbox(partition_key, created_at, id)
+    WHERE published_at IS NULL;
 ```
 
 The historical `V3__in_app_notifications.sql` migration is retained for Flyway compatibility.
@@ -247,19 +278,30 @@ CREATE TABLE achievement_activity_events (
     tenant_id       UUID NOT NULL,
     user_id         UUID NOT NULL,
     activity_log_id UUID NOT NULL,
+    habit_id        UUID,
     completion_date DATE NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_achievement_activity_event UNIQUE (tenant_id, user_id, activity_log_id)
 );
 CREATE INDEX ix_achievement_activity_dates
     ON achievement_activity_events(tenant_id, user_id, completion_date DESC);
+CREATE INDEX ix_achievement_activity_habit_dates
+    ON achievement_activity_events(tenant_id, user_id, habit_id, completion_date DESC);
+
+CREATE TABLE achievement_activity_users (
+    tenant_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    PRIMARY KEY (tenant_id, user_id)
+);
 ```
 
 **Notes.** Progress is accumulated from consumed `activity.logged` events; `completed` flips when
 `progress >= target`. Invitations are unique per `(challenge, invitee)`.
 
 The challenge-service also stores the user's earned achievements and activity-event receipts. Unique
-keys make event processing and milestone awards idempotent.
+keys make event processing and milestone awards idempotent. Per-user lock rows serialize milestone
+calculation; participant row locks serialize progress updates. Old activity receipts have a null habit ID
+until the original event is replayed or a reliable historical backfill is performed.
 
 ---
 
@@ -293,11 +335,27 @@ CREATE TABLE raw_partner_events (
     CONSTRAINT uq_raw_event UNIQUE (connection_id, external_event_id)  -- edge-level dedup
 );
 CREATE INDEX ix_raw_events_tenant_status ON raw_partner_events(tenant_id, processing_status);
+
+CREATE TABLE partner_event_outbox (
+    id              UUID PRIMARY KEY,
+    partition_key   VARCHAR(100) NOT NULL,
+    envelope        TEXT NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at    TIMESTAMPTZ,
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_error      VARCHAR(500)
+);
+CREATE INDEX ix_partner_outbox_pending ON partner_event_outbox(next_attempt_at, created_at)
+    WHERE published_at IS NULL;
+CREATE INDEX ix_partner_outbox_partition ON partner_event_outbox(partition_key, created_at, id)
+    WHERE published_at IS NULL;
 ```
 
 **Notes.** The HMAC secret is **referenced**, not stored — the actual secret lives in Secrets Manager
 (NFR-4, no hardcoded secrets). `uq_raw_event` is the first de-duplication layer; the second is in
-`activity_log`. Raw payloads are retained for audit and replay.
+`activity_log`. Raw payloads are retained for audit and replay. New webhook receipts and their outbox
+rows commit atomically; the migration does not backfill events accepted before the outbox existed.
 
 ---
 

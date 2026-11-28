@@ -6,7 +6,7 @@ import java.time.OffsetDateTime;
 
 /**
  * Internal domain event published when an activity is logged (manual or ingested). Consumed in-process
- * by the Kafka publisher (after commit) and, downstream, by challenge- and analytics-service.
+ * by the transactional outbox and, downstream, by challenge- and analytics-service.
  */
 public record ActivityLoggedEvent(
         String tenantId,

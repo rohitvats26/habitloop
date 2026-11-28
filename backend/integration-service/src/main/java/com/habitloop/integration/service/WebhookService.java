@@ -19,7 +19,6 @@ import com.habitloop.integration.security.HmacSigner;
 import com.habitloop.integration.security.SecretStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -74,6 +73,8 @@ public class WebhookService {
 
         String externalEventId = extractExternalEventId(rawBody);
 
+        connections.findForUpdateById(connectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Connection", connectionId));
         if (rawEvents.existsByConnectionIdAndExternalEventId(connectionId, externalEventId)) {
             log.info("Duplicate webhook event {} for connection {} — no-op", externalEventId, connectionId);
             return WebhookResponse.duplicate(null);
@@ -85,11 +86,7 @@ public class WebhookService {
         event.setExternalEventId(externalEventId);
         event.setPayload(rawBody);
         event.setProcessingStatus(ProcessingStatus.RECEIVED);
-        try {
-            event = rawEvents.save(event);
-        } catch (DataIntegrityViolationException dup) {
-            return WebhookResponse.duplicate(null);
-        }
+        event = rawEvents.save(event);
 
         connection.setLastEventAt(OffsetDateTime.now());
         connections.save(connection);

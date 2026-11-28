@@ -1,9 +1,5 @@
 package com.habitloop.activity.event;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.habitloop.activity.service.ActivityIngestService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -17,24 +13,14 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "habitloop.events.transport", havingValue = "kafka")
 public class PartnerActivityConsumer {
 
-    private static final Logger log = LoggerFactory.getLogger(PartnerActivityConsumer.class);
+    private final PartnerActivityHandler handler;
 
-    private final ActivityIngestService ingestService;
-    private final ObjectMapper objectMapper;
-
-    public PartnerActivityConsumer(ActivityIngestService ingestService, ObjectMapper objectMapper) {
-        this.ingestService = ingestService;
-        this.objectMapper = objectMapper;
+    public PartnerActivityConsumer(PartnerActivityHandler handler) {
+        this.handler = handler;
     }
 
     @KafkaListener(topics = "partner.activity.normalized", groupId = "activity-service")
     public void onMessage(String message) {
-        try {
-            NormalizedPartnerActivity activity = objectMapper.readValue(message, NormalizedPartnerActivity.class);
-            ingestService.recordExternalActivity(activity);
-        } catch (Exception e) {
-            // Malformed payloads are logged and dropped here; the pipeline's DLQ handles upstream failures.
-            log.error("Failed to process partner.activity.normalized message", e);
-        }
+        handler.handle(message);
     }
 }

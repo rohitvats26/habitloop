@@ -35,6 +35,15 @@ public class HabitStreak {
     @Column(name = "last_completed")
     private LocalDate lastCompleted;
 
+    @Column(name = "snapshot_date")
+    private LocalDate snapshotDate;
+
+    @Column(name = "snapshot_day_longest")
+    private Integer snapshotDayLongest;
+
+    @Column(name = "snapshot_week_longest")
+    private Integer snapshotWeekLongest;
+
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt = OffsetDateTime.now();
 
@@ -93,5 +102,29 @@ public class HabitStreak {
 
     public OffsetDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    public LocalDate getSnapshotDate() {
+        return snapshotDate;
+    }
+
+    public void setSnapshotDate(LocalDate snapshotDate) {
+        this.snapshotDate = snapshotDate;
+    }
+
+    public Integer getSnapshotDayLongest() {
+        return snapshotDayLongest;
+    }
+
+    public void setSnapshotDayLongest(Integer snapshotDayLongest) {
+        this.snapshotDayLongest = snapshotDayLongest;
+    }
+
+    public Integer getSnapshotWeekLongest() {
+        return snapshotWeekLongest;
+    }
+
+    public void setSnapshotWeekLongest(Integer snapshotWeekLongest) {
+        this.snapshotWeekLongest = snapshotWeekLongest;
     }
 }

@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -50,5 +53,28 @@ class AnalyticsIngestServiceTest {
         String pk = AnalyticsKeys.pk(tenantId, userId);
         AnalyticsItem daily = store.get(pk, AnalyticsKeys.skDaily(LocalDate.of(2026, 11, 24))).orElseThrow();
         assertThat(daily.getCompletions()).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentEventsAndReplaysCountExactlyOnce() throws Exception {
+        OffsetDateTime at = OffsetDateTime.parse("2026-11-23T22:30:00Z");
+        var executor = Executors.newFixedThreadPool(8);
+        try {
+            var tasks = IntStream.range(0, 400)
+                    .<java.util.concurrent.Callable<Void>>mapToObj(i -> () -> {
+                        service.apply(tenantId, userId, "log" + (i % 200), at);
+                        return null;
+                    }).toList();
+            for (var future : executor.invokeAll(tasks)) {
+                future.get();
+            }
+        } finally {
+            executor.shutdown();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+        String pk = AnalyticsKeys.pk(tenantId, userId);
+        assertThat(store.get(pk, AnalyticsKeys.skDaily(LocalDate.of(2026, 11, 24)))
+                .orElseThrow().getCompletions()).isEqualTo(200);
+        assertThat(store.get(pk, AnalyticsKeys.SK_PATTERN).orElseThrow().getByHour()).containsEntry("04", 200);
     }
 }

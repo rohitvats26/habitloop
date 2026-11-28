@@ -52,7 +52,7 @@ class ProgressServiceTest {
     @Test
     void applyActivity_incrementsProgress_forActiveChallenge() {
         ChallengeParticipant p = participant(BigDecimal.ZERO);
-        when(participants.findByTenantIdAndUserId(tenantId, userId)).thenReturn(List.of(p));
+        when(participants.findByTenantIdAndUserIdOrderByIdAsc(tenantId, userId)).thenReturn(List.of(p));
         when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId))
                 .thenReturn(Optional.of(challenge(new BigDecimal("5"))));
         when(progressEvents.existsByParticipantIdAndActivityLogId(participantId, activityLogId)).thenReturn(false);
@@ -67,7 +67,7 @@ class ProgressServiceTest {
     @Test
     void applyActivity_duplicate_isSkipped() {
         ChallengeParticipant p = participant(BigDecimal.ZERO);
-        when(participants.findByTenantIdAndUserId(tenantId, userId)).thenReturn(List.of(p));
+        when(participants.findByTenantIdAndUserIdOrderByIdAsc(tenantId, userId)).thenReturn(List.of(p));
         when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId))
                 .thenReturn(Optional.of(challenge(new BigDecimal("5"))));
         when(progressEvents.existsByParticipantIdAndActivityLogId(participantId, activityLogId)).thenReturn(true);
@@ -81,7 +81,7 @@ class ProgressServiceTest {
     @Test
     void applyActivity_reachingTarget_marksCompleted() {
         ChallengeParticipant p = participant(new BigDecimal("4"));
-        when(participants.findByTenantIdAndUserId(tenantId, userId)).thenReturn(List.of(p));
+        when(participants.findByTenantIdAndUserIdOrderByIdAsc(tenantId, userId)).thenReturn(List.of(p));
         when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId))
                 .thenReturn(Optional.of(challenge(new BigDecimal("5"))));
         when(progressEvents.existsByParticipantIdAndActivityLogId(participantId, activityLogId)).thenReturn(false);
@@ -100,7 +100,7 @@ class ProgressServiceTest {
         LocalDate end = LocalDate.now(TimeZones.INDIA).minusDays(1);
         c.setEndsOn(end);
         c.setStartsOn(end.minusDays(2));
-        when(participants.findByTenantIdAndUserId(tenantId, userId)).thenReturn(List.of(p));
+        when(participants.findByTenantIdAndUserIdOrderByIdAsc(tenantId, userId)).thenReturn(List.of(p));
         when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId)).thenReturn(Optional.of(c));
 
         service.applyActivity(tenantId, userId, activityLogId, end.atTime(23, 30)
@@ -113,7 +113,7 @@ class ProgressServiceTest {
     void activityOutsideWindowOrBeforeJoiningDoesNotCount() {
         ChallengeParticipant p = participant(BigDecimal.ZERO);
         Challenge c = challenge(new BigDecimal("5"));
-        when(participants.findByTenantIdAndUserId(tenantId, userId)).thenReturn(List.of(p));
+        when(participants.findByTenantIdAndUserIdOrderByIdAsc(tenantId, userId)).thenReturn(List.of(p));
         when(challenges.findByIdAndTenantIdAndDeletedAtIsNull(challengeId, tenantId)).thenReturn(Optional.of(c));
         var outsideWindow = c.getEndsOn().plusDays(1).atStartOfDay(TimeZones.INDIA).toOffsetDateTime();
         var beforeJoining = LocalDate.now(TimeZones.INDIA).minusDays(6)

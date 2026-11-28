@@ -3,6 +3,10 @@ variable "region" { type = string }
 variable "alb_arn_suffix" { type = string }
 variable "lambda_name" { type = string }
 variable "dlq_name" { type = string }
+variable "internal_dlq_name" { type = string }
+variable "consumer_queue_names" { type = map(string) }
+variable "activity_log_group_name" { type = string }
+variable "integration_log_group_name" { type = string }
 variable "rds_identifier" { type = string }
 variable "alarm_email" {
   type    = string
@@ -79,6 +83,85 @@ resource "aws_cloudwatch_metric_alarm" "dlq_depth" {
   period              = 60
   statistic           = "Maximum"
   dimensions          = { QueueName = var.dlq_name }
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  tags                = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "internal_dlq_depth" {
+  alarm_name          = "${var.name}-internal-dlq-not-empty"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  threshold           = 0
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 60
+  statistic           = "Maximum"
+  dimensions          = { QueueName = var.internal_dlq_name }
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  tags                = var.tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "consumer_queue_age" {
+  for_each            = var.consumer_queue_names
+  alarm_name          = "${var.name}-${each.key}-events-oldest-message"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 300
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  namespace           = "AWS/SQS"
+  period              = 60
+  statistic           = "Maximum"
+  dimensions          = { QueueName = each.value }
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  tags                = var.tags
+}
+
+resource "aws_cloudwatch_log_metric_filter" "activity_outbox_backlog" {
+  name           = "${var.name}-activity-outbox-backlog"
+  log_group_name = var.activity_log_group_name
+  pattern        = "\"ACTIVITY_OUTBOX_BACKLOG\""
+  metric_transformation {
+    name      = "ActivityOutboxBacklog"
+    namespace = "HabitLoop/${var.name}"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "activity_outbox_backlog" {
+  alarm_name          = "${var.name}-activity-outbox-backlog"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  threshold           = 0
+  metric_name         = "ActivityOutboxBacklog"
+  namespace           = "HabitLoop/${var.name}"
+  period              = 60
+  statistic           = "Sum"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  tags                = var.tags
+}
+
+resource "aws_cloudwatch_log_metric_filter" "partner_outbox_backlog" {
+  name           = "${var.name}-partner-outbox-backlog"
+  log_group_name = var.integration_log_group_name
+  pattern        = "\"PARTNER_OUTBOX_BACKLOG\""
+  metric_transformation {
+    name      = "PartnerOutboxBacklog"
+    namespace = "HabitLoop/${var.name}"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "partner_outbox_backlog" {
+  alarm_name          = "${var.name}-partner-outbox-backlog"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  threshold           = 0
+  metric_name         = "PartnerOutboxBacklog"
+  namespace           = "HabitLoop/${var.name}"
+  period              = 60
+  statistic           = "Sum"
+  treat_missing_data  = "notBreaching"
   alarm_actions       = [aws_sns_topic.alarms.arn]
   tags                = var.tags
 }

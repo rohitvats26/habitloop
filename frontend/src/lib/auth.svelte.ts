@@ -3,21 +3,22 @@ import { decodeJwt } from './jwt';
 import type { AuthUser } from './types';
 
 const TOKEN_KEY = 'hl_token';
+const REFRESH_KEY = 'hl_refresh';
 
-function readToken(): string | null {
+function readStored(key: string): string | null {
   if (!browser) return null;
   try {
-    const token = sessionStorage.getItem(TOKEN_KEY);
+    const token = sessionStorage.getItem(key);
     if (token && decodeJwt(token)) return token;
-    sessionStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(key);
+    localStorage.removeItem(key);
     return null;
   } catch {
     return null;
   }
 }
 
-const initial = readToken();
+const initial = readStored(TOKEN_KEY);
 
 /**
  * Client-side auth state (runes). The JWT is kept in sessionStorage and sent as a Bearer header by the API
@@ -29,11 +30,12 @@ export const auth = $state<{ token: string | null; user: AuthUser | null }>({
   user: initial ? decodeJwt(initial) : null
 });
 
-export function setToken(token: string) {
+export function setToken(token: string, refreshToken?: string) {
   auth.token = token;
   auth.user = decodeJwt(token);
   try {
     sessionStorage.setItem(TOKEN_KEY, token);
+    if (refreshToken) sessionStorage.setItem(REFRESH_KEY, refreshToken);
   } catch {
     /* storage unavailable (private mode) — session-only */
   }
@@ -44,6 +46,7 @@ export function logout() {
   auth.user = null;
   try {
     sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(TOKEN_KEY);
   } catch {
     /* ignore */
@@ -52,6 +55,10 @@ export function logout() {
 
 export function getToken(): string | null {
   return auth.token;
+}
+
+export function getRefreshToken(): string | null {
+  return readStored(REFRESH_KEY);
 }
 
 export function isAuthenticated(): boolean {

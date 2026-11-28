@@ -10,7 +10,6 @@ import com.habitloop.challenge.repository.ChallengeRepository;
 import com.habitloop.common.time.TimeZones;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,7 +45,7 @@ public class ProgressService {
 
     @Transactional
     public void applyActivity(UUID tenantId, UUID userId, UUID activityLogId, OffsetDateTime occurredAt) {
-        List<ChallengeParticipant> parts = participants.findByTenantIdAndUserId(tenantId, userId);
+        List<ChallengeParticipant> parts = participants.findByTenantIdAndUserIdOrderByIdAsc(tenantId, userId);
         LocalDate activityDate = occurredAt.atZoneSameInstant(TimeZones.INDIA).toLocalDate();
         for (ChallengeParticipant p : parts) {
             Challenge c = challenges.findByIdAndTenantIdAndDeletedAtIsNull(p.getChallengeId(), tenantId)
@@ -59,15 +58,11 @@ public class ProgressService {
             if (progressEvents.existsByParticipantIdAndActivityLogId(p.getId(), activityLogId)) {
                 continue; // already counted
             }
-            try {
-                ChallengeProgressEvent ev = new ChallengeProgressEvent();
-                ev.setTenantId(tenantId);
-                ev.setParticipantId(p.getId());
-                ev.setActivityLogId(activityLogId);
-                progressEvents.save(ev);
-            } catch (DataIntegrityViolationException dup) {
-                continue; // concurrent delivery already counted it
-            }
+            ChallengeProgressEvent ev = new ChallengeProgressEvent();
+            ev.setTenantId(tenantId);
+            ev.setParticipantId(p.getId());
+            ev.setActivityLogId(activityLogId);
+            progressEvents.save(ev);
             p.setProgress(p.getProgress().add(BigDecimal.ONE));
             boolean newlyCompleted = !p.isCompleted() && p.getProgress().compareTo(c.getTarget()) >= 0;
             if (newlyCompleted) {

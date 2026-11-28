@@ -3,14 +3,18 @@ package com.habitloop.analytics.store;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
+import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 import software.amazon.awssdk.enhanced.dynamodb.Expression;
 import software.amazon.awssdk.enhanced.dynamodb.Key;
-import software.amazon.awssdk.enhanced.dynamodb.model.PutItemEnhancedRequest;
 import software.amazon.awssdk.enhanced.dynamodb.model.QueryConditional;
-import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
+import software.amazon.awssdk.enhanced.dynamodb.model.TransactPutItemEnhancedRequest;
+import software.amazon.awssdk.enhanced.dynamodb.model.TransactWriteItemsEnhancedRequest;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -22,38 +26,66 @@ import java.util.Optional;
 public class DynamoDbAnalyticsStore implements AnalyticsStore {
 
     private final DynamoDbTable<AnalyticsItem> table;
+    private final DynamoDbEnhancedClient client;
 
-    public DynamoDbAnalyticsStore(DynamoDbTable<AnalyticsItem> table) {
+    public DynamoDbAnalyticsStore(DynamoDbTable<AnalyticsItem> table, DynamoDbEnhancedClient client) {
         this.table = table;
+        this.client = client;
     }
 
     @Override
-    public boolean markProcessedIfAbsent(String pk, String activityLogId) {
-        AnalyticsItem marker = new AnalyticsItem();
-        marker.setPk(pk);
-        marker.setSk(AnalyticsKeys.skProcessed(activityLogId));
-        marker.setUpdatedAt(OffsetDateTime.now().toString());
-        try {
-            table.putItem(PutItemEnhancedRequest.builder(AnalyticsItem.class)
-                    .item(marker)
-                    .conditionExpression(Expression.builder()
-                            .expression("attribute_not_exists(pk)")
-                            .build())
-                    .build());
-            return true;
-        } catch (ConditionalCheckFailedException alreadyProcessed) {
+    public boolean apply(AnalyticsUpdate update) {
+        String pk = update.pk();
+        String markerKey = AnalyticsKeys.skProcessed(update.activityLogId());
+        if (readStrong(pk, markerKey) != null) {
             return false;
         }
+        AnalyticsItem daily = readStrong(pk, AnalyticsKeys.skDaily(update.date()));
+        AnalyticsItem weekly = readStrong(pk, AnalyticsKeys.skWeekly(update.isoWeek()));
+        AnalyticsItem pattern = readStrong(pk, AnalyticsKeys.SK_PATTERN);
+        AnalyticsItem marker = new AnalyticsItem();
+        marker.setPk(pk);
+        marker.setSk(markerKey);
+        marker.setUpdatedAt(OffsetDateTime.now().toString());
+        var transaction = TransactWriteItemsEnhancedRequest.builder()
+                .addPutItem(table, TransactPutItemEnhancedRequest.builder(AnalyticsItem.class)
+                        .item(marker).conditionExpression(Expression.builder()
+                                .expression("attribute_not_exists(pk)").build()).build())
+                .addPutItem(table, conditionalPut(update.daily(daily), daily))
+                .addPutItem(table, conditionalPut(update.weekly(weekly), weekly))
+                .addPutItem(table, conditionalPut(update.pattern(pattern), pattern))
+                .build();
+        try {
+            client.transactWriteItems(transaction);
+            return true;
+        } catch (TransactionCanceledException e) {
+            if (readStrong(pk, markerKey) != null) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    private AnalyticsItem readStrong(String pk, String sk) {
+        Key key = Key.builder().partitionValue(pk).sortValue(sk).build();
+        return table.getItem(request -> request.key(key).consistentRead(true));
+    }
+
+    private TransactPutItemEnhancedRequest<AnalyticsItem> conditionalPut(AnalyticsItem item, AnalyticsItem previous) {
+        var expression = Expression.builder().expressionNames(Map.of("#revision", "revision"));
+        if (previous == null || previous.getRevision() == null) {
+            expression.expression("attribute_not_exists(#revision)");
+        } else {
+            expression.expression("#revision = :revision")
+                    .expressionValues(Map.of(":revision", AttributeValue.builder().s(previous.getRevision()).build()));
+        }
+        return TransactPutItemEnhancedRequest.builder(AnalyticsItem.class)
+                .item(item).conditionExpression(expression.build()).build();
     }
 
     @Override
     public Optional<AnalyticsItem> get(String pk, String sk) {
         return Optional.ofNullable(table.getItem(Key.builder().partitionValue(pk).sortValue(sk).build()));
-    }
-
-    @Override
-    public void put(AnalyticsItem item) {
-        table.putItem(item);
     }
 
     @Override

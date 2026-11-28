@@ -4,8 +4,11 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
+  import { memberLabel } from '$lib/challenges';
+  import { fetchAllPages } from '$lib/pagination';
   import { pushToast } from '$lib/stores/toast.svelte';
-  import type { Invitation, Page } from '$lib/types';
+  import { refreshPendingInvitations, setPendingInvitationCount } from '$lib/stores/invitations.svelte';
+  import type { Invitation } from '$lib/types';
 
   let invitations = $state<Invitation[]>([]);
   let error = $state('');
@@ -16,10 +19,10 @@
     loading = true;
     error = '';
     try {
-      const inv = (await api.invitations.pending()) as Page<Invitation>;
-      invitations = inv.content ?? [];
+      invitations = await fetchAllPages(api.invitations.pending);
+      setPendingInvitationCount(invitations.length);
     } catch (e) {
-      error = e instanceof ApiError ? e.message : 'Failed to load invitations';
+      error = e instanceof Error ? e.message : 'Failed to load invitations';
     } finally {
       loading = false;
     }
@@ -55,6 +58,7 @@
     }
 
     pushToast('Invitation accepted', 'success');
+    void refreshPendingInvitations(true);
     try {
       await goto(`/challenges/${invitation.challengeId}`);
     } catch {
@@ -87,21 +91,23 @@
 {:else}
   <div class="grid list">
     {#each invitations as inv (inv.id)}
-      <article class="card inv">
+      {@const inviter = memberLabel(inv.inviterId, inv.inviterName)}
+      <article class="card inv accent-top" style="--stripe: var(--grad-violet)" aria-labelledby={`invite-${inv.id}`}>
         <div class="invite-info">
-          <span class="invite-icon" aria-hidden="true">✦</span>
+          <span class="avatar" aria-hidden="true">{inviter.charAt(0).toUpperCase()}</span>
           <div>
-          <strong>Challenge invite</strong>
-          <div class="muted">From user {inv.inviterId.slice(0, 8)}…</div>
-          <div class="muted">Challenge ID {inv.challengeId.slice(0, 8)}…</div>
+            <span class="pill tone-violet">Challenge invite</span>
+            <h2 id={`invite-${inv.id}`}>{inv.challengeTitle ?? 'Challenge invitation'}</h2>
+            <p class="muted">Invited by <strong>{inviter}</strong></p>
+            {#if !inv.challengeTitle}<p class="muted">This challenge may no longer be available.</p>{/if}
           </div>
         </div>
         <div class="ops">
-          <button class="btn btn-primary" onclick={() => accept(inv.id)} disabled={processingIds.includes(inv.id)}>Accept</button>
-          <button class="btn" onclick={() => acceptAndOpen(inv)} disabled={processingIds.includes(inv.id)} aria-busy={processingIds.includes(inv.id)}>
+          <button class="btn btn-primary" onclick={() => acceptAndOpen(inv)} disabled={processingIds.includes(inv.id)} aria-busy={processingIds.includes(inv.id)}>
             {processingIds.includes(inv.id) ? 'Working…' : 'Accept & view'}
           </button>
-          <button class="btn" onclick={() => reject(inv.id)} disabled={processingIds.includes(inv.id)}>Reject</button>
+          <button class="btn" onclick={() => accept(inv.id)} disabled={processingIds.includes(inv.id)}>Accept</button>
+          <button class="btn btn-ghost decline" onclick={() => reject(inv.id)} disabled={processingIds.includes(inv.id)}>Decline</button>
         </div>
       </article>
     {:else}
@@ -113,12 +119,15 @@
 {/if}
 
 <style>
-  .list { grid-template-columns: repeat(auto-fit,minmax(min(100%,420px),1fr)); }
-  .inv { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; border-left: 3px solid color-mix(in srgb,var(--primary) 54%,var(--border)); }
-  .invite-info { display: flex; min-width: min(100%,220px); flex: 1; align-items: center; gap: .8rem; }
-  .invite-info strong { display: block; margin-bottom: .2rem; }
-  .invite-info .muted { font-size: .8rem; }
-  .invite-icon { display: grid; width: 2.6rem; height: 2.6rem; flex: none; place-items: center; border-radius: 14px; background: color-mix(in srgb,var(--primary) 11%,var(--surface)); color: var(--primary); }
-  .ops { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  @media (max-width: 560px) { .ops { width: 100%; } .ops .btn { flex: 1; justify-content: center; } }
+  .list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 1.1rem; }
+  .inv { display: grid; gap: 1.1rem; padding-top: 1.6rem; }
+  .invite-info { display: flex; align-items: flex-start; gap: .9rem; }
+  .invite-info h2 { margin: .45rem 0 .15rem; font-size: 1.15rem; }
+  .invite-info p { margin: 0; font-size: .88rem; }
+  .invite-info strong { color: var(--text); }
+  .avatar { display: grid; width: 2.8rem; height: 2.8rem; flex: none; place-items: center; border-radius: 50%; background: var(--grad-violet); color: #fff; font-weight: 800; box-shadow: 0 6px 16px color-mix(in srgb, var(--violet) 30%, transparent); }
+  .ops { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-top: .9rem; border-top: 1px solid var(--border); }
+  .decline { margin-left: auto; }
+  .decline:hover:not(:disabled) { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+  @media (max-width: 560px) { .ops .btn { flex: 1; justify-content: center; } .decline { margin-left: 0; } }
 </style>

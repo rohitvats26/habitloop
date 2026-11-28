@@ -18,6 +18,7 @@ public record ChallengeDetailResponse(
         LocalDate endsOn,
         BigDecimal myProgress,
         boolean completed,
+        boolean canInvite,
         List<LeaderboardEntry> leaderboard
 ) {
 }

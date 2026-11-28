@@ -39,9 +39,10 @@ export function recommendationUpdate(recommendation: Recommendation, habit: Habi
 }
 
 function supportedSchedule(habit: Habit): Record<string, unknown> {
+  const source = habit.pendingSchedule?.schedule ?? habit.schedule;
   const schedule: Record<string, unknown> = {};
   for (const field of ['daysOfWeek', 'targetTime', 'perWeek']) {
-    if (field in habit.schedule) schedule[field] = habit.schedule[field];
+    if (field in source) schedule[field] = source[field];
   }
   return schedule;
 }
@@ -53,14 +54,15 @@ export function hasApplicableRecommendation(recommendation: Recommendation): boo
 
 export function isRecommendationApplied(recommendation: Recommendation, habit: Habit): boolean {
   const action = recommendation.action;
+  const planned = habit.pendingSchedule ?? habit;
   if (isValidTime(action.suggestedTime)) {
-    return habit.schedule.targetTime === action.suggestedTime;
+    return planned.schedule.targetTime === action.suggestedTime;
   }
   if (isValidWeeklyTarget(action.suggestedPerWeek)) {
-    return habit.frequency === 'WEEKLY'
-      && habit.schedule.perWeek === action.suggestedPerWeek
-      && habit.targetPerPeriod === action.suggestedPerWeek
-      && !('daysOfWeek' in habit.schedule);
+    return planned.frequency === 'WEEKLY'
+      && planned.schedule.perWeek === action.suggestedPerWeek
+      && planned.targetPerPeriod === action.suggestedPerWeek
+      && !('daysOfWeek' in planned.schedule);
   }
   return false;
 }

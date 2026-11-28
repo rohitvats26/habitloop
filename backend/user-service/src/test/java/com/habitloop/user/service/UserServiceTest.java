@@ -53,6 +53,21 @@ class UserServiceTest {
     }
 
     @Test
+    void displayNames_areTenantScopedAndOmitBlankNames() {
+        UUID other = UUID.randomUUID();
+        UserProfile named = buildProfile();
+        UserProfile blank = new UserProfile();
+        blank.setUserId(other);
+        blank.setTenantId(tenantId);
+        blank.setDisplayName(" ");
+        when(profiles.findByTenantIdAndUserIdIn(tenantId, Set.of(userId, other))).thenReturn(List.of(named, blank));
+
+        var names = userService.displayNames(List.of(userId, other, userId));
+
+        assertThat(names).extracting("id").containsExactly(userId.toString());
+    }
+
+    @Test
     void getCurrentUser_returnsProfileData() {
         when(users.findByIdAndTenantId(userId, tenantId)).thenReturn(Optional.of(buildUser()));
         when(profiles.findByUserIdAndTenantId(userId, tenantId)).thenReturn(Optional.of(buildProfile()));

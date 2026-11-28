@@ -84,6 +84,22 @@ describe('recommendation actions', () => {
     expect(isRecommendationApplied(r, { ...weekly, targetPerPeriod: 2 })).toBe(false);
   });
 
+  it('recognizes scheduled recommendations and builds later updates from the pending schedule', () => {
+    const planned: Habit = {
+      ...habit,
+      pendingSchedule: {
+        effectiveDate: '2026-11-30',
+        frequency: 'WEEKLY',
+        schedule: { perWeek: 4, targetTime: '08:00' },
+        targetPerPeriod: 4
+      }
+    };
+    expect(isRecommendationApplied(recommendation({ suggestedPerWeek: 4 }), planned)).toBe(true);
+    expect(isRecommendationApplied(recommendation({ suggestedTime: '07:00' }), planned)).toBe(false);
+    expect(recommendationUpdate(recommendation({ suggestedTime: '09:00' }), planned))
+      .toEqual({ schedule: { perWeek: 4, targetTime: '09:00' } });
+  });
+
   it('limits habit-specific recommendations to their active habit', () => {
     const other = { ...habit, id: 'habit-2' };
     const r = { ...recommendation({ suggestedTime: '08:00' }), habitId: habit.id };

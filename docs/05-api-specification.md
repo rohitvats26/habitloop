@@ -41,6 +41,7 @@ the weekly analytics range accepts 1–52 weeks.
 | PUT  | `/api/users/me` | USER | update profile (display name, fixed timezone, avatar) |
 | GET  | `/api/users/{id}` | TENANT_ADMIN | fetch a tenant user |
 | GET  | `/internal/users/{id}` | service | internal verify (same-tenant) |
+| POST | `/internal/users/display-names` | service | resolve display names for up to 200 user IDs (same-tenant; returns only `id` and `displayName`) |
 | GET  | `/api/tenants/me` | USER, TENANT_ADMIN | current tenant details and join code |
 
 **Register — request**
@@ -95,14 +96,32 @@ fields are rejected. Unselected weekdays are rest days. Weekly consistency is re
 `weeklyProgress` and compares completed habits against scheduled opportunities elapsed in the current
 IST week. Updates must contain at least one field; targets must be positive. Paused habits resume
 automatically at the start of the requested resume date.
+Daily and weekday-based streaks count consecutive scheduled completions, excluding paused days. For
+weekly-target habits without specific weekdays, streaks count consecutive weeks meeting the target;
+an unfinished current week does not break the streak. A fully paused week is skipped. A partly paused
+week retains its target. Schedule changes that affect a weekly streak start on the next IST Monday;
+other schedule changes start the next IST day. The response exposes the current schedule and an optional
+`pendingSchedule` with `effectiveDate`, `frequency`, `schedule`, and `targetPerPeriod`. A new edit replaces
+the pending change; submitting the active schedule cancels it. Changing between day- and week-based
+streaks starts a new current streak; best day and week streaks are tracked separately.
+
+Streaks use the schedule effective on each completion date, including backdated completions and pause
+periods. Earlier schedule changes cannot be reconstructed: the migration treats each habit's schedule
+at deployment as its historical baseline. Reads use a weekly snapshot after a habit is changed or
+completed; existing habits without one temporarily fall back to their full completion history.
+Deploy the activity-service migration and updated service together; do not run older service versions
+alongside the new version because they do not maintain schedule history or invalidate snapshots.
 **Response `201`**
 ```json
 { "id": "4d2e...", "name": "Morning run", "frequency": "CUSTOM",
   "schedule": { "daysOfWeek": [1,3,5], "targetTime": "07:00", "perWeek": 3 },
   "active": true, "pausedUntil": null, "streak": { "current": 0, "longest": 0 },
-  "weeklyProgress": { "completed": 1, "expected": 2, "consistencyPercent": 50 } }
+  "weeklyProgress": { "completed": 1, "expected": 2, "consistencyPercent": 50 },
+  "pendingSchedule": null }
 ```
 The optional `targetTime` records the intended habit time; it does not send a reminder.
+In completion history, `occurredAt` is the recorded completion date at the start of that IST day, not
+the time the entry was created. This preserves backdated completion dates without implying a completion time.
 **Mark complete — request/response**
 ```json
 POST /api/habits/4d2e.../completions   { "date": "2026-11-23", "note": "felt great" }
@@ -146,10 +165,20 @@ still update progress.
 **Details — response `200`**
 ```json
 { "id": "c3...", "title": "30-day Move", "visibility": "PUBLIC", "status": "ACTIVE",
-  "target": 30, "myProgress": 8, "completed": false,
-  "leaderboard": [ { "userId": "u9", "displayName": "Ria", "progress": 12 },
-                   { "userId": "u4", "displayName": "Sam", "progress": 8 } ] }
+  "target": 30, "myProgress": 8, "completed": false, "canInvite": true,
+  "leaderboard": [ { "userId": "u9", "displayName": "Ria", "progress": 12, "completed": false },
+                   { "userId": "u4", "displayName": null, "progress": 8, "completed": false } ] }
 ```
+`myProgress` is `null` when the caller has not joined. `canInvite` is `true` only for the creator while the
+challenge is `ACTIVE`. Leaderboard `displayName` is resolved from user-service for the same tenant and is
+`null` when the member has no display name or user-service is unavailable (the leaderboard still loads).
+
+**Pending invitations — response item**
+```json
+{ "id": "i1...", "challengeId": "c3...", "challengeTitle": "30-day Move",
+  "inviterId": "u9...", "inviterName": "Ria", "inviteeId": "u4...", "status": "PENDING" }
+```
+`challengeTitle` and `inviterName` may be `null` if the challenge was deleted or the name is unavailable.
 Inviting a user not in your tenant → `404` (not revealed). Joining a `PRIVATE` challenge without an invite
 → `403`.
 Challenge invitations require `userId` as a standard UUID (the user's ID shown in Profile & settings);
@@ -174,7 +203,10 @@ email addresses are not accepted.
 
 Achievements are awarded idempotently for completion milestones (1, 10, 50, 100), 7- and 30-day
 completion streaks, challenge participation, and challenge completion. Activity-based awards are derived
-from the `activity.logged` event stream.
+from the `activity.logged` event stream. Streak badges require 7 or 30 consecutive IST calendar days
+for the same habit. Events without a habit ID count toward completion milestones but not streak badges.
+Receipts recorded before habit IDs were stored cannot establish a habit-specific streak without backfill;
+replaying the original events can fill missing habit IDs. Previously granted badges are preserved.
 **Webhook — request** (headers `X-HL-Signature: <hex HMAC-SHA256>`, `X-HL-Event-Id: evt_123`)
 ```json
 POST /api/webhooks/b7...
@@ -189,6 +221,8 @@ ISO-8601 date-time, and `habitId` must be a UUID. `409` only if a hard conflict.
 ```json
 202 → { "status": "ACCEPTED", "rawEventId": "r9...", "deduplicated": false }
 ```
+Acceptance commits the raw event and a durable outbox entry; normalization and activity creation happen
+asynchronously and may be retried. A duplicate response does not imply downstream processing has finished.
 
 ---
 

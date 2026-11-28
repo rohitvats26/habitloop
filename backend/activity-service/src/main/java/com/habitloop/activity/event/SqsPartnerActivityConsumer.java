@@ -1,7 +1,6 @@
 package com.habitloop.activity.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.habitloop.activity.service.ActivityIngestService;
 import com.habitloop.common.event.eventbridge.SqsEventPoller;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -19,25 +18,12 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 @ConditionalOnProperty(name = "habitloop.events.transport", havingValue = "eventbridge")
 public class SqsPartnerActivityConsumer {
 
-    private final ActivityIngestService ingestService;
-    private final ObjectMapper objectMapper;
     private final SqsEventPoller poller;
 
     public SqsPartnerActivityConsumer(SqsClient sqs, ObjectMapper objectMapper,
-                                      ActivityIngestService ingestService,
+                                      PartnerActivityHandler handler,
                                       @Value("${habitloop.events.queue-url:}") String queueUrl) {
-        this.ingestService = ingestService;
-        this.objectMapper = objectMapper;
-        this.poller = new SqsEventPoller(sqs, objectMapper, queueUrl, "activity", this::handle);
-    }
-
-    private void handle(String detail) {
-        try {
-            NormalizedPartnerActivity activity = objectMapper.readValue(detail, NormalizedPartnerActivity.class);
-            ingestService.recordExternalActivity(activity);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to process partner.activity.normalized", e);
-        }
+        this.poller = new SqsEventPoller(sqs, objectMapper, queueUrl, "activity", handler::handle);
     }
 
     @PostConstruct

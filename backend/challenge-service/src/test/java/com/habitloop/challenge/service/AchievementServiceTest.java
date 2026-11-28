@@ -29,6 +29,7 @@ class AchievementServiceTest {
     private final UUID tenantId = UUID.randomUUID();
     private final UUID userId = UUID.randomUUID();
     private final UUID activityLogId = UUID.randomUUID();
+    private final UUID habitId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -42,12 +43,12 @@ class AchievementServiceTest {
         for (int i = 0; i < 30; i++) {
             dates.add(today.minusDays(i));
         }
-        when(activityEvents.insertIfAbsent(any(), eq(tenantId), eq(userId), eq(activityLogId), eq(today)))
+        when(activityEvents.insertIfAbsent(any(), eq(tenantId), eq(userId), eq(activityLogId), eq(habitId), eq(today)))
                 .thenReturn(1);
         when(activityEvents.countByTenantIdAndUserId(tenantId, userId)).thenReturn(100L);
-        when(activityEvents.findDistinctDates(tenantId, userId)).thenReturn(dates);
+        when(activityEvents.findDistinctDates(tenantId, userId, habitId)).thenReturn(dates);
 
-        service.recordActivity(tenantId, userId, activityLogId, "HABIT_DONE",
+        service.recordActivity(tenantId, userId, activityLogId, habitId, "HABIT_DONE",
                 OffsetDateTime.parse("2026-11-26T10:00:00+05:30"));
 
         verify(awards, times(6)).insertIfAbsent(any(UUID.class), eq(tenantId), eq(userId),
@@ -56,10 +57,10 @@ class AchievementServiceTest {
 
     @Test
     void duplicateActivityEventDoesNotRecalculateOrAward() {
-        when(activityEvents.insertIfAbsent(any(), eq(tenantId), eq(userId), eq(activityLogId), any()))
+        when(activityEvents.insertIfAbsent(any(), eq(tenantId), eq(userId), eq(activityLogId), eq(habitId), any()))
                 .thenReturn(0);
 
-        service.recordActivity(tenantId, userId, activityLogId, "HABIT_DONE",
+        service.recordActivity(tenantId, userId, activityLogId, habitId, "HABIT_DONE",
                 OffsetDateTime.parse("2026-11-26T10:00:00+05:30"));
 
         verifyNoInteractions(awards);
@@ -68,9 +69,42 @@ class AchievementServiceTest {
 
     @Test
     void nonHabitActivityDoesNotEarnHabitMilestones() {
-        service.recordActivity(tenantId, userId, activityLogId, "PARTNER_ACTIVITY",
+        service.recordActivity(tenantId, userId, activityLogId, habitId, "PARTNER_ACTIVITY",
                 OffsetDateTime.parse("2026-11-26T10:00:00+05:30"));
 
         verifyNoInteractions(activityEvents, awards);
+    }
+
+    @Test
+    void backfilledHistoryAwardsStreakOnlyForTheSameHabit() {
+        LocalDate today = LocalDate.of(2026, 11, 26);
+        var dates = new ArrayList<LocalDate>();
+        dates.add(today);
+        for (int i = 3; i < 10; i++) {
+            dates.add(today.minusDays(i));
+        }
+        when(activityEvents.insertIfAbsent(any(), eq(tenantId), eq(userId), eq(activityLogId), eq(habitId), eq(today)))
+                .thenReturn(1);
+        when(activityEvents.findDistinctDates(tenantId, userId, habitId)).thenReturn(dates);
+
+        service.recordActivity(tenantId, userId, activityLogId, habitId, "HABIT_DONE",
+                OffsetDateTime.parse("2026-11-26T10:00:00+05:30"));
+
+        verify(awards).insertIfAbsent(any(), eq(tenantId), eq(userId), eq("SEVEN_DAY_STREAK"),
+                eq("streak:7"), anyString(), anyString(), any());
+        verify(activityEvents).findDistinctDates(tenantId, userId, habitId);
+    }
+
+    @Test
+    void completionWithoutHabitCanEarnCountMilestonesButNotStreakBadges() {
+        var date = LocalDate.of(2026, 11, 26);
+        when(activityEvents.insertWithoutHabitIfAbsent(any(), eq(tenantId), eq(userId), eq(activityLogId), eq(date)))
+                .thenReturn(1);
+        when(activityEvents.countByTenantIdAndUserId(tenantId, userId)).thenReturn(1L);
+        service.recordActivity(tenantId, userId, activityLogId, null, "HABIT_DONE",
+                OffsetDateTime.parse("2026-11-26T10:00:00+05:30"));
+        verify(awards).insertIfAbsent(any(), eq(tenantId), eq(userId), eq("FIRST_STEP"),
+                eq("completion:1"), anyString(), anyString(), any());
+        verify(activityEvents, never()).findDistinctDates(any(), any(), any());
     }
 }

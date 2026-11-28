@@ -82,3 +82,6 @@ Fargate (~7 small tasks) and the ALB have no free tier, so a short-lived demo ke
 - **Service-to-service calls** use the public ALB DNS for simplicity; production would use an internal ALB or
   ECS Service Connect / Cloud Map and keep `/internal/*` off the public listener.
 - **CORS** defaults to `*` (`habitloop.cors.allowed-origins`); tighten to the CloudFront frontend origin for production.
+- **Container runtime:** images run as non-root user `10001` and size the JVM heap from the task memory limit
+  (`JAVA_TOOL_OPTIONS`: 50% initial, 75% max, exit on OOM so ECS replaces the task). A 512 MB task gets a ~384 MB
+  heap. Override `JAVA_TOOL_OPTIONS` in the task definition if a service needs different sizing.

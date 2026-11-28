@@ -194,6 +194,17 @@ resource "aws_lambda_function" "normalizer" {
   tags = var.tags
 }
 
+resource "aws_lambda_function_event_invoke_config" "normalizer" {
+  function_name                = aws_lambda_function.normalizer.function_name
+  maximum_event_age_in_seconds = 3600
+  maximum_retry_attempts       = 2
+  destination_config {
+    on_failure {
+      destination = aws_sqs_queue.dlq.arn
+    }
+  }
+}
+
 resource "aws_cloudwatch_event_rule" "partner_received" {
   name           = "${var.name}-partner-event-received"
   event_bus_name = aws_cloudwatch_event_bus.this.name
@@ -231,6 +242,10 @@ output "bus_name" { value = aws_cloudwatch_event_bus.this.name }
 output "bus_arn" { value = aws_cloudwatch_event_bus.this.arn }
 output "lambda_name" { value = aws_lambda_function.normalizer.function_name }
 output "dlq_name" { value = aws_sqs_queue.dlq.name }
+output "internal_dlq_name" { value = aws_sqs_queue.internal_dlq.name }
+output "queue_names" {
+  value = { for k, q in aws_sqs_queue.consumer : k => q.name }
+}
 output "queue_urls" {
   value = { for k, q in aws_sqs_queue.consumer : k => q.id }
 }

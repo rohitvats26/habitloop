@@ -40,10 +40,14 @@ public class EventBridgePublisher {
                     .detailType(detailType)
                     .detail(detailJson)
                     .build();
-            client.putEvents(b -> b.entries(entry));
+            var result = client.putEvents(b -> b.entries(entry));
+            if (result.failedEntryCount() > 0) {
+                throw new IllegalStateException("EventBridge rejected " + detailType + ": " + result.entries());
+            }
             log.debug("Published {} to EventBridge bus {}", detailType, busName);
         } catch (Exception e) {
             log.error("Failed to publish {} to EventBridge", detailType, e);
+            throw new IllegalStateException("Failed to publish " + detailType + " to EventBridge", e);
         }
     }
 }

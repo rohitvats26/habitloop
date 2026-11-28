@@ -3,6 +3,7 @@ package com.habitloop.normalizer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -20,8 +21,11 @@ public class EventNormalizer {
         this.mapper = mapper;
     }
 
-    public String normalize(String receivedEnvelopeJson) throws Exception {
+    public String normalize(String receivedEnvelopeJson) throws JsonProcessingException {
         JsonNode root = mapper.readTree(receivedEnvelopeJson);
+        if (root == null || !root.isObject()) {
+            return null;
+        }
         JsonNode payload = root.path("payload");
 
         String tenantId = payload.path("tenantId").asText(null);

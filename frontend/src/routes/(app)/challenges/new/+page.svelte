@@ -3,8 +3,9 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api';
+  import { challengeDateError } from '$lib/challenges';
   import { userDateString } from '$lib/date';
-  import type { ChallengeSummary } from '$lib/types';
+  import { guardUnsavedChanges } from '$lib/unsaved';
 
   let title = $state('');
   let description = $state('');
@@ -13,13 +14,22 @@
   let target = $state(30);
   let startsOn = $state('');
   let endsOn = $state('');
+  let today = $state('');
   let error = $state('');
+  let details = $state<string[]>([]);
   let loading = $state(false);
   let dateLoading = $state(true);
+  let created = false;
+
+  guardUnsavedChanges(() => !created && (
+    title.trim() !== '' || description.trim() !== '' || endsOn !== '' || Number(target) !== 30
+    || visibility !== 'PUBLIC' || (today !== '' && startsOn !== today)
+  ));
 
   onMount(() => {
     void userDateString()
       .then((date) => {
+        today = date;
         startsOn = date;
       })
       .catch((reason: unknown) => {
@@ -33,20 +43,32 @@
   async function submit(e: SubmitEvent) {
     e.preventDefault();
     error = '';
+    details = [];
+    if (!title.trim()) {
+      error = 'Enter a challenge title.';
+      return;
+    }
+    const dateProblem = challengeDateError(startsOn, endsOn, today);
+    if (dateProblem) {
+      error = dateProblem;
+      return;
+    }
     loading = true;
     try {
-      const created = (await api.challenges.create({
-        title,
+      const challenge = await api.challenges.create({
+        title: title.trim(),
         description,
         visibility,
         metric,
         target: Number(target),
         startsOn,
         endsOn
-      })) as ChallengeSummary;
-      await goto(`/challenges/${created.id}`);
+      });
+      created = true;
+      await goto(`/challenges/${challenge.id}`);
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Unexpected error';
+      details = e instanceof ApiError ? e.details : [];
     } finally {
       loading = false;
     }
@@ -54,7 +76,12 @@
 </script>
 
 <Topbar title="Create challenge" subtitle="Set a goal and invite your community to join." />
-{#if error}<div class="error-banner" role="alert">{error}</div>{/if}
+{#if error}
+  <div class="error-banner" role="alert">
+    {error}
+    {#if details.length}<ul>{#each details as detail}<li>{detail}</li>{/each}</ul>{/if}
+  </div>
+{/if}
 
 <form onsubmit={submit} class="card challenge-form">
   <h2>Challenge details</h2>
@@ -72,7 +99,7 @@
   <p class="field-hint">The target is how many activities each participant aims to record. The end date is the last day activities count, even if the target has not been reached. Both dates are inclusive.</p>
   <div class="row">
     <div class="field"><label class="label" for="startsOn">Starts</label><input class="input" id="startsOn" type="date" bind:value={startsOn} required /></div>
-    <div class="field"><label class="label" for="endsOn">Ends</label><input class="input" id="endsOn" type="date" bind:value={endsOn} min={startsOn} required /></div>
+    <div class="field"><label class="label" for="endsOn">Ends</label><input class="input" id="endsOn" type="date" bind:value={endsOn} min={startsOn > today ? startsOn : today} required /></div>
   </div>
   <p class="date-note muted" role="status">
     {#if dateLoading}<span class="loading-spinner loading-spinner-small" aria-hidden="true"></span> Preparing dates…

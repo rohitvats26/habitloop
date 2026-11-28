@@ -25,22 +25,32 @@ public class InMemoryAnalyticsStore implements AnalyticsStore {
     }
 
     @Override
-    public boolean markProcessedIfAbsent(String pk, String activityLogId) {
-        return processed.putIfAbsent(key(pk, activityLogId), Boolean.TRUE) == null;
+    public synchronized boolean apply(AnalyticsUpdate update) {
+        String pk = update.pk();
+        String marker = key(pk, update.activityLogId());
+        if (processed.containsKey(marker)) {
+            return false;
+        }
+        String dailyKey = key(pk, AnalyticsKeys.skDaily(update.date()));
+        String weeklyKey = key(pk, AnalyticsKeys.skWeekly(update.isoWeek()));
+        String patternKey = key(pk, AnalyticsKeys.SK_PATTERN);
+        AnalyticsItem daily = update.daily(items.get(dailyKey));
+        AnalyticsItem weekly = update.weekly(items.get(weeklyKey));
+        AnalyticsItem pattern = update.pattern(items.get(patternKey));
+        items.put(dailyKey, daily);
+        items.put(weeklyKey, weekly);
+        items.put(patternKey, pattern);
+        processed.put(marker, Boolean.TRUE);
+        return true;
     }
 
     @Override
-    public Optional<AnalyticsItem> get(String pk, String sk) {
+    public synchronized Optional<AnalyticsItem> get(String pk, String sk) {
         return Optional.ofNullable(items.get(key(pk, sk)));
     }
 
     @Override
-    public void put(AnalyticsItem item) {
-        items.put(key(item.getPk(), item.getSk()), item);
-    }
-
-    @Override
-    public List<AnalyticsItem> queryPrefix(String pk, String skPrefix) {
+    public synchronized List<AnalyticsItem> queryPrefix(String pk, String skPrefix) {
         List<AnalyticsItem> result = new ArrayList<>();
         for (AnalyticsItem item : items.values()) {
             if (item.getPk().equals(pk) && item.getSk().startsWith(skPrefix)) {
@@ -51,7 +61,7 @@ public class InMemoryAnalyticsStore implements AnalyticsStore {
     }
 
     @Override
-    public List<AnalyticsItem> queryCohort(String gsi1pk) {
+    public synchronized List<AnalyticsItem> queryCohort(String gsi1pk) {
         List<AnalyticsItem> result = new ArrayList<>();
         for (AnalyticsItem item : items.values()) {
             if (gsi1pk.equals(item.getGsi1pk())) {

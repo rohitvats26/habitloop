@@ -15,6 +15,7 @@ public record HabitResponse(
         boolean active,
         StreakDto streak,
         LocalDate pausedUntil,
-        HabitWeeklyProgress weeklyProgress
+        HabitWeeklyProgress weeklyProgress,
+        HabitScheduleVersionDto pendingSchedule
 ) {
 }

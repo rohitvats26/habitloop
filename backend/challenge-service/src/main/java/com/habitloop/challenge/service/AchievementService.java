@@ -49,13 +49,17 @@ public class AchievementService {
     }
 
     @Transactional
-    public void recordActivity(UUID tenantId, UUID userId, UUID activityLogId,
+    public void recordActivity(UUID tenantId, UUID userId, UUID activityLogId, UUID habitId,
                                String activityType, OffsetDateTime occurredAt) {
         if (!"HABIT_DONE".equals(activityType)) {
             return;
         }
         LocalDate date = occurredAt.atZoneSameInstant(TimeZones.INDIA).toLocalDate();
-        int inserted = activityEvents.insertIfAbsent(UUID.randomUUID(), tenantId, userId, activityLogId, date);
+        activityEvents.ensureUser(tenantId, userId);
+        activityEvents.lockUser(tenantId, userId);
+        int inserted = habitId == null
+                ? activityEvents.insertWithoutHabitIfAbsent(UUID.randomUUID(), tenantId, userId, activityLogId, date)
+                : activityEvents.insertIfAbsent(UUID.randomUUID(), tenantId, userId, activityLogId, habitId, date);
         if (inserted == 0) {
             return;
         }
@@ -67,7 +71,7 @@ public class AchievementService {
             }
         }
 
-        int streak = currentStreak(activityEvents.findDistinctDates(tenantId, userId));
+        int streak = habitId == null ? 0 : longestStreak(activityEvents.findDistinctDates(tenantId, userId, habitId));
         for (Milestone milestone : STREAK_MILESTONES) {
             if (streak >= milestone.threshold()) {
                 award(tenantId, userId, milestone, "streak:" + milestone.threshold());
@@ -96,22 +100,25 @@ public class AchievementService {
                 milestone.title(), milestone.description(), OffsetDateTime.now(TimeZones.INDIA));
     }
 
-    private int currentStreak(List<LocalDate> datesDescending) {
+    private int longestStreak(List<LocalDate> datesDescending) {
         if (datesDescending.isEmpty()) {
             return 0;
         }
         int streak = 1;
+        int longest = 1;
         LocalDate previous = datesDescending.get(0);
         for (int i = 1; i < datesDescending.size(); i++) {
             LocalDate date = datesDescending.get(i);
             if (date.equals(previous.minusDays(1))) {
                 streak++;
+                longest = Math.max(longest, streak);
                 previous = date;
             } else if (date.isBefore(previous.minusDays(1))) {
-                break;
+                streak = 1;
+                previous = date;
             }
         }
-        return streak;
+        return longest;
     }
 
     private UUID currentTenantId() {

@@ -9,35 +9,31 @@ import { progressRatio } from '../../utils';
     :host { display: block; }
     .card {
       position: relative; overflow: hidden; padding: 1.15rem;
-      border: 1px solid color-mix(in srgb, #23c8b3 22%, var(--border,#e3e7ef));
-      border-radius: 18px;
-      background: linear-gradient(145deg, color-mix(in srgb, #23c8b3 7%, var(--surface,#fff)), var(--surface,#fff) 58%);
+      border: 1px solid color-mix(in srgb, var(--primary,#0a8276) 22%, var(--border,#e3e7ef));
+      border-radius: var(--radius,22px);
+      background: linear-gradient(145deg, color-mix(in srgb, var(--primary,#0a8276) 6%, var(--surface,#fff)), var(--surface,#fff) 58%);
+      box-shadow: var(--shadow,none);
       transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
     }
-    .card::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(180deg,#42e3d0,#6988f2); content: ''; }
-    .card:hover { border-color: color-mix(in srgb, #23c8b3 48%, var(--border,#e3e7ef)); box-shadow: 0 12px 30px rgba(13,148,136,.12); transform: translateY(-2px); }
+    .card::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(180deg,var(--primary,#0a8276),var(--violet,#6d5ae6)); content: ''; }
+    .card:hover { border-color: color-mix(in srgb, var(--primary,#0a8276) 48%, var(--border,#e3e7ef)); box-shadow: var(--shadow-lg,0 12px 30px rgba(13,148,136,.12)); transform: translateY(-2px); }
     .top { display: flex; align-items: center; gap: .7rem; margin-bottom: 1rem; }
     .icon {
       display: grid; width: 2.45rem; height: 2.45rem; flex: none; place-items: center;
-      border: 1px solid color-mix(in srgb,#23c8b3 22%,transparent); border-radius: 13px;
-      background: color-mix(in srgb,#23c8b3 13%,var(--surface,#fff)); color: #0f9f92;
+      border: 1px solid color-mix(in srgb,var(--primary,#0a8276) 22%,transparent); border-radius: 13px;
+      background: color-mix(in srgb,var(--primary,#0a8276) 13%,var(--surface,#fff)); color: var(--primary,#0a8276);
     }
     .icon svg { width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
     .category { display: grid; gap: .12rem; }
     .eyebrow { color: var(--text-muted,#5b6474); font: 700 .63rem var(--font,system-ui); letter-spacing: .11em; }
-    .badge { width: fit-content; padding: .12rem .48rem; border: 1px solid color-mix(in srgb,#23c8b3 26%,transparent); border-radius: 999px; background: color-mix(in srgb,#23c8b3 10%,var(--surface,#fff)); color: #087f75; font: 700 .7rem var(--font,system-ui); }
+    .badge { width: fit-content; padding: .12rem .48rem; border: 1px solid color-mix(in srgb,var(--primary,#0a8276) 26%,transparent); border-radius: 999px; background: color-mix(in srgb,var(--primary,#0a8276) 10%,var(--surface,#fff)); color: var(--primary-strong,#076b61); font: 700 .7rem var(--font,system-ui); }
     .headline { margin: 0; color: var(--text,#1a1d29); font: 700 1.1rem/1.3 var(--font,system-ui); letter-spacing: -.02em; }
     .msg { max-width: 58ch; margin: .35rem 0 0; color: var(--text-muted,#5b6474); font: 400 .88rem/1.55 var(--font,system-ui); }
     .signal-heading { display: flex; justify-content: space-between; gap: .75rem; margin-top: 1rem; color: var(--text-muted,#5b6474); font: 600 .72rem var(--font,system-ui); }
     .signal-heading strong { color: var(--text,#1a1d29); font-variant-numeric: tabular-nums; }
-    .confidence-track { height: 5px; overflow: hidden; margin-top: .4rem; border-radius: 999px; background: color-mix(in srgb,#23c8b3 12%,var(--border,#e3e7ef)); }
-    .confidence-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg,#23c8b3,#6b91f6); transition: width .3s ease; }
+    .confidence-track { height: 5px; overflow: hidden; margin-top: .4rem; border-radius: 999px; background: color-mix(in srgb,var(--primary,#0a8276) 12%,var(--border,#e3e7ef)); }
+    .confidence-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg,var(--primary,#0a8276),var(--violet,#6d5ae6)); transition: width .3s ease; }
     .note { margin: .45rem 0 0; color: var(--text-muted,#5b6474); font-size: .7rem; }
-    @media (prefers-color-scheme: dark) {
-      .icon { color: #51ddcc; }
-      .badge { color: #72e3d6; }
-      .card:hover { box-shadow: 0 12px 30px rgba(35,200,179,.1); }
-    }
     @media (max-width: 360px) {
       .card { padding: .95rem; }
     }

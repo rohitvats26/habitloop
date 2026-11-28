@@ -8,6 +8,9 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -28,6 +31,7 @@ public class SqsEventPoller {
 
     private volatile boolean running;
     private Thread thread;
+    private ScheduledExecutorService visibilityExecutor;
 
     public SqsEventPoller(SqsClient sqs, ObjectMapper mapper, String queueUrl, String name, Consumer<String> handler) {
         this.sqs = sqs;
@@ -39,9 +43,13 @@ public class SqsEventPoller {
 
     public void start() {
         if (queueUrl == null || queueUrl.isBlank()) {
-            log.warn("SQS poller '{}' has no queue URL — not starting", name);
-            return;
+            throw new IllegalStateException("SQS poller '" + name + "' requires a queue URL");
         }
+        visibilityExecutor = Executors.newSingleThreadScheduledExecutor(task -> {
+            Thread worker = new Thread(task, "sqs-visibility-" + name);
+            worker.setDaemon(true);
+            return worker;
+        });
         running = true;
         thread = new Thread(this::loop, "sqs-poller-" + name);
         thread.setDaemon(true);
@@ -57,27 +65,46 @@ public class SqsEventPoller {
     }
 
     private void loop() {
-        while (running) {
-            try {
-                ReceiveMessageResponse resp = sqs.receiveMessage(b -> b
-                        .queueUrl(queueUrl)
-                        .maxNumberOfMessages(10)
-                        .waitTimeSeconds(20));
-                for (Message m : resp.messages()) {
-                    try {
-                        handler.accept(extractDetail(m.body()));
-                        sqs.deleteMessage(b -> b.queueUrl(queueUrl).receiptHandle(m.receiptHandle()));
-                    } catch (Exception ex) {
-                        // Leave the message on the queue; SQS redrive / DLQ handles repeated failures.
-                        log.error("Poller '{}' failed to process a message", name, ex);
+        try {
+            while (running) {
+                try {
+                    ReceiveMessageResponse resp = sqs.receiveMessage(b -> b
+                            .queueUrl(queueUrl)
+                            .maxNumberOfMessages(1)
+                            .visibilityTimeout(60)
+                            .waitTimeSeconds(20));
+                    for (Message m : resp.messages()) {
+                        if (!running) {
+                            break;
+                        }
+                        var renewal = visibilityExecutor.scheduleWithFixedDelay(() -> {
+                            try {
+                                sqs.changeMessageVisibility(b -> b.queueUrl(queueUrl)
+                                        .receiptHandle(m.receiptHandle()).visibilityTimeout(60));
+                            } catch (Exception ex) {
+                                log.error("Poller '{}' failed to renew message visibility", name, ex);
+                            }
+                        }, 20, 20, TimeUnit.SECONDS);
+                        try {
+                            handler.accept(extractDetail(m.body()));
+                            renewal.cancel(false);
+                            sqs.deleteMessage(b -> b.queueUrl(queueUrl).receiptHandle(m.receiptHandle()));
+                        } catch (Exception ex) {
+                            // Leave the message on the queue; SQS redrive / DLQ handles repeated failures.
+                            log.error("Poller '{}' failed to process a message", name, ex);
+                        } finally {
+                            renewal.cancel(false);
+                        }
+                    }
+                } catch (Exception e) {
+                    if (running) {
+                        log.error("Poller '{}' receive error; backing off", name, e);
+                        sleep(2000);
                     }
                 }
-            } catch (Exception e) {
-                if (running) {
-                    log.error("Poller '{}' receive error; backing off", name, e);
-                    sleep(2000);
-                }
             }
+        } finally {
+            visibilityExecutor.shutdownNow();
         }
     }
 

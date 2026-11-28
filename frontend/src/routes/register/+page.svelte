@@ -11,32 +11,49 @@
   let tenantName = $state('');
   let joinCode = $state('');
   let error = $state('');
+  let details = $state<string[]>([]);
   let loading = $state(false);
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
     error = '';
+    details = [];
     loading = true;
     const payload = {
-      email,
+      email: email.trim(),
       password,
-      displayName,
+      displayName: displayName.trim(),
       timezone: INDIA_TIMEZONE,
-      tenantName: mode === 'create' ? tenantName : undefined,
-      joinCode: mode === 'join' ? joinCode : undefined
+      tenantName: mode === 'create' ? tenantName.trim() : undefined,
+      joinCode: mode === 'join' ? joinCode.trim() : undefined
     };
     try {
       await api.auth.register(payload);
-      const res = await api.auth.login({ email, password });
-      setToken(res.accessToken);
-      await goto('/onboarding');
     } catch (err) {
       error = err instanceof ApiError ? err.message : "We couldn't create your account. Please try again.";
+      details = err instanceof ApiError ? err.details : [];
+      loading = false;
+      return;
+    }
+
+    try {
+      const res = await api.auth.login({
+        email: payload.email,
+        password,
+        tenantCode: mode === 'join' ? payload.joinCode : undefined
+      });
+      setToken(res.accessToken, res.refreshToken);
+      await goto('/onboarding');
+    } catch {
+      // The account exists now; retrying registration would fail as a duplicate, so continue at log in.
+      await goto('/login?registered=1');
     } finally {
       loading = false;
     }
   }
 </script>
+
+<svelte:head><title>Create account · HabitLoop</title></svelte:head>
 
 <main class="auth-page">
   <div class="auth-layout">
@@ -64,7 +81,12 @@
         <span class="eyebrow">Get started</span>
         <h1>Create your account</h1>
         <p class="muted">A few details, then you're on your way.</p>
-        {#if error}<div class="error-banner" role="alert">{error}</div>{/if}
+        {#if error}
+          <div class="error-banner" role="alert">
+            {error}
+            {#if details.length}<ul>{#each details as detail}<li>{detail}</li>{/each}</ul>{/if}
+          </div>
+        {/if}
 
         <div class="toggle">
           <button type="button" class="btn" class:btn-primary={mode === 'create'} aria-pressed={mode === 'create'} onclick={() => (mode = 'create')}>

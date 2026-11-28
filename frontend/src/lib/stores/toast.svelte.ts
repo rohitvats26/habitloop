@@ -10,7 +10,8 @@ let seq = 0;
 export function pushToast(message: string, type: Toast['type'] = 'info') {
   const id = ++seq;
   toasts.push({ id, type, message });
-  setTimeout(() => dismissToast(id), type === 'error' ? 8000 : 5000);
+  // Errors stay until dismissed so they can be read at any pace.
+  if (type !== 'error') setTimeout(() => dismissToast(id), 5000);
 }
 
 export function dismissToast(id: number) {

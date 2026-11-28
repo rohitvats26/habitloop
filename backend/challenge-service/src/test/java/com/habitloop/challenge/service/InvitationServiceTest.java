@@ -146,6 +146,29 @@ class InvitationServiceTest {
         verify(invitations, never()).save(any());
     }
 
+    @Test
+    void pendingInvitations_includeChallengeTitleAndInviterName() {
+        UUID inviterId = UUID.randomUUID();
+        ChallengeInvitation inv = new ChallengeInvitation();
+        inv.setId(UUID.randomUUID());
+        inv.setTenantId(tenantId);
+        inv.setChallengeId(challengeId);
+        inv.setInviterId(inviterId);
+        inv.setInviteeId(userId);
+        inv.setStatus(InvitationStatus.PENDING);
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(invitations.findByTenantIdAndInviteeIdAndStatus(tenantId, userId, InvitationStatus.PENDING, pageable))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(inv), pageable, 1));
+        when(challenges.findAllById(java.util.Set.of(challengeId))).thenReturn(List.of(challenge(inviterId)));
+        when(userClient.displayNames(java.util.Set.of(inviterId)))
+                .thenReturn(java.util.Map.of(inviterId.toString(), "Asha"));
+
+        InvitationResponse res = service.myPendingInvitations(pageable).content().get(0);
+
+        assertThat(res.challengeTitle()).isEqualTo("C");
+        assertThat(res.inviterName()).isEqualTo("Asha");
+    }
+
     private Challenge challenge(UUID creatorId) {
         Challenge c = new Challenge();
         c.setId(challengeId);
